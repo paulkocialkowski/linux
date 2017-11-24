@@ -17,6 +17,7 @@ struct dma_coherent_mem {
 	int		size;
 	unsigned long	*bitmap;
 	spinlock_t	spinlock;
+	bool		no_align;
 	bool		use_dev_dma_pfn_offset;
 };
 
@@ -144,19 +145,35 @@ static void *__dma_alloc_from_coherent(struct device *dev,
 				       struct dma_coherent_mem *mem,
 				       ssize_t size, dma_addr_t *dma_handle)
 {
-	int order = get_order(size);
 	unsigned long flags;
 	int pageno;
 	void *ret;
 
 	spin_lock_irqsave(&mem->spinlock, flags);
 
-	if (unlikely(size > ((dma_addr_t)mem->size << PAGE_SHIFT)))
+	if (unlikely(size > ((dma_addr_t)mem->size << PAGE_SHIFT))) {
+		WARN_ONCE(1, "%s too big size, req-size: %zu total-size: %d\n",
+			  __func__, size, (mem->size << PAGE_SHIFT));
 		goto err;
+	}
 
-	pageno = bitmap_find_free_region(mem->bitmap, mem->size, order);
-	if (unlikely(pageno < 0))
-		goto err;
+	if (mem->no_align) {
+		int nr_page = PAGE_ALIGN(size) >> PAGE_SHIFT;
+
+		pageno = bitmap_find_next_zero_area(mem->bitmap, mem->size, 0,
+						    nr_page, 0);
+		if (unlikely(pageno >= mem->size)) {
+			pr_err("%s: alloc failed, req-size: %u pages\n", __func__, nr_page);
+			goto err;
+		}
+		bitmap_set(mem->bitmap, pageno, nr_page);
+	} else {
+		int order = get_order(size);
+
+		pageno = bitmap_find_free_region(mem->bitmap, mem->size, order);
+		if (unlikely(pageno < 0))
+			goto err;
+	}
 
 	/*
 	 * Memory was found in the coherent area.
@@ -209,7 +226,7 @@ void *dma_alloc_from_global_coherent(struct device *dev, ssize_t size,
 }
 
 static int __dma_release_from_coherent(struct dma_coherent_mem *mem,
-				       int order, void *vaddr)
+				       size_t size, void *vaddr)
 {
 	if (mem && vaddr >= mem->virt_base && vaddr <
 		   (mem->virt_base + ((dma_addr_t)mem->size << PAGE_SHIFT))) {
@@ -217,7 +234,12 @@ static int __dma_release_from_coherent(struct dma_coherent_mem *mem,
 		unsigned long flags;
 
 		spin_lock_irqsave(&mem->spinlock, flags);
-		bitmap_release_region(mem->bitmap, page, order);
+		if (mem->no_align)
+			bitmap_clear(mem->bitmap, page,
+				     PAGE_ALIGN(size) >> PAGE_SHIFT);
+		else
+			bitmap_release_region(mem->bitmap, page,
+					      get_order(size));
 		spin_unlock_irqrestore(&mem->spinlock, flags);
 		return 1;
 	}
@@ -227,7 +249,7 @@ static int __dma_release_from_coherent(struct dma_coherent_mem *mem,
 /**
  * dma_release_from_dev_coherent() - free memory to device coherent memory pool
  * @dev:	device from which the memory was allocated
- * @order:	the order of pages allocated
+ * @size:	the size of allocated
  * @vaddr:	virtual address of allocated pages
  *
  * This checks whether the memory was allocated from the per-device
@@ -236,19 +258,19 @@ static int __dma_release_from_coherent(struct dma_coherent_mem *mem,
  * Returns 1 if we correctly released the memory, or 0 if the caller should
  * proceed with releasing memory from generic pools.
  */
-int dma_release_from_dev_coherent(struct device *dev, int order, void *vaddr)
+int dma_release_from_dev_coherent(struct device *dev, ssize_t size, void *vaddr)
 {
 	struct dma_coherent_mem *mem = dev_get_coherent_memory(dev);
 
-	return __dma_release_from_coherent(mem, order, vaddr);
+	return __dma_release_from_coherent(mem, size, vaddr);
 }
 
-int dma_release_from_global_coherent(int order, void *vaddr)
+int dma_release_from_global_coherent(ssize_t size, void *vaddr)
 {
 	if (!dma_coherent_default_memory)
 		return 0;
 
-	return __dma_release_from_coherent(dma_coherent_default_memory, order,
+	return __dma_release_from_coherent(dma_coherent_default_memory, size,
 			vaddr);
 }
 
@@ -320,6 +342,7 @@ static struct reserved_mem *dma_reserved_default_memory __initdata;
 static int rmem_dma_device_init(struct reserved_mem *rmem, struct device *dev)
 {
 	struct dma_coherent_mem *mem = rmem->priv;
+	unsigned long node = rmem->fdt_node;
 	int ret;
 
 	if (!mem) {
@@ -333,6 +356,8 @@ static int rmem_dma_device_init(struct reserved_mem *rmem, struct device *dev)
 	}
 	mem->use_dev_dma_pfn_offset = true;
 	rmem->priv = mem;
+	if (of_get_flat_dt_prop(node, "no-align", NULL))
+		mem->no_align = true;
 	dma_assign_coherent_memory(dev, mem);
 	return 0;
 }

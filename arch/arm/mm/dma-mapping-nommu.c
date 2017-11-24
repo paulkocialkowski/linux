@@ -56,7 +56,7 @@ static void arm_nommu_dma_free(struct device *dev, size_t size,
 			       void *cpu_addr, dma_addr_t dma_addr,
 			       unsigned long attrs)
 {
-	int ret = dma_release_from_global_coherent(get_order(size), cpu_addr);
+	int ret = dma_release_from_global_coherent(size, cpu_addr);
 
 	WARN_ON_ONCE(ret == 0);
 }
