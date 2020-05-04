@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-* Nunchuk driver
+* OV8865 MIPI Camera Subdev Driver 
 * Copyright Kévin L'hôpital (C) 2020
 */
 
@@ -28,34 +28,38 @@
 
 /* regulator supplies */
 static const char * const ov8865_supply_name[] = {
-	"DOVDD", /* Digital I/O (1,8V/2.8V) supply */
 	"AVDD",  /* Analog (2.8V) supply */
-	"DVDD",  /* Digital Core (1.2V) supply */
+	"DOVDD", /* Digital I/O (1,8V/2.8V) supply */
+	"VDD2",  /* Digital Core (1.2V) supply */
+	"AFVDD",
 };
 
 #define OV8865_NUM_SUPPLIES ARRAY_SIZE(ov8865_supply_name)
+struct ov8865_ctrls {
+	struct v4l2_ctrl_handler handler;
+};
 
 struct ov8865_dev {
 	struct i2c_client *i2c_client;
-//	struct v4l2_subdev sd;
-//	struct media_pad pad;
+	struct v4l2_subdev sd;
+	struct media_pad pad;
 	struct clk *xclk;
 	u32 xclk_freq;
 	struct regulator_bulk_data supplies[OV8865_NUM_SUPPLIES];
 	struct gpio_desc *reset_gpio;
 
 	struct gpio_desc *pwdn_gpio;
-//	struct mutex lock;
+	struct mutex lock;
 
-//	int power_count;
+	int power_count;
 
-//	struct ov8865_ctrls ctrls;
+	struct ov8865_ctrls ctrls;
 };
-/*
+
 static inline struct ov8865_dev *to_ov8865_dev(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct ov8865_dev, sd);
-}*/
+}
 /* ASK!!*/
 static int ov8865_init_slave_id(struct ov8865_dev *sensor)
 {
@@ -89,7 +93,7 @@ static int ov8865_read_reg(struct ov8865_dev *sensor, u16 reg, u8 *val)
 {
 	struct i2c_client *client = sensor->i2c_client;
 	struct i2c_msg msg[2];
-	u8 buf[4];
+	u8 buf[2];
 	int ret = 0;
 
 	buf[0] = reg >> 8;
@@ -103,7 +107,7 @@ static int ov8865_read_reg(struct ov8865_dev *sensor, u16 reg, u8 *val)
 	msg[1].addr = client->addr;
 	msg[1].flags =  I2C_M_RD;
 	msg[1].buf = buf;
-	msg[1].len = 2;
+	msg[1].len = 1;
 
 	ret = i2c_transfer(client->adapter, msg, 2);
 	if (ret < 0) {
@@ -115,42 +119,14 @@ static int ov8865_read_reg(struct ov8865_dev *sensor, u16 reg, u8 *val)
 	return 0;
 }
 
-static int ov8865_read_reg16(struct ov8865_dev *sensor, u16 reg, u16 *val)
-{
-	u8 hi, lo;
-	int ret = 0;
-
-	ret = ov8865_read_reg(sensor, reg, &hi);
-	if (ret)
-		return ret;
-	ret = ov8865_read_reg(sensor, reg +1, &lo);
-	if (ret)
-		return ret;
-
-	*val = ((u16)hi << 8) | (u16)lo;
-	return 0;
-}
-
 static void ov8865_power(struct ov8865_dev *sensor, bool enable)
 {
-	gpiod_set_value_cansleep(sensor->pwdn_gpio, enable ? 1 : 0);
+	gpiod_set_value_cansleep(sensor->pwdn_gpio, enable ? 0 : 1);
 }
 
-static void ov8865_reset(struct ov8865_dev *sensor)
+static void ov8865_reset(struct ov8865_dev *sensor, bool enable)
 {
-	if(!sensor->reset_gpio)
-		return;
-
-	gpiod_set_value_cansleep(sensor->reset_gpio, 0);
-
-	ov8865_power(sensor, false);
-	usleep_range(5000, 10000);
-	ov8865_power(sensor, true);
-	usleep_range(5000, 10000);
-
-	gpiod_set_value_cansleep(sensor->reset_gpio, 1);
-	usleep_range(2000, 3000);
-
+	gpiod_set_value_cansleep(sensor->reset_gpio, enable ? 0 : 1);
 }
 
 static int ov8865_set_power_on(struct ov8865_dev *sensor)
@@ -158,14 +134,8 @@ static int ov8865_set_power_on(struct ov8865_dev *sensor)
 	struct i2c_client *client = sensor->i2c_client;
 	int ret = 0;
 
-	ov8865_power(sensor, true);
-	ret = regulator_bulk_enable(OV8865_NUM_SUPPLIES, sensor->supplies);
-	if (ret) {
-		dev_err(&client->dev, "%s: failed to enable regulators\n",
-			__func__);
-		goto xclk_off;
-	}
-	ov8865_reset(sensor);
+	ov8865_power(sensor, false);
+	ov8865_reset(sensor,false);
 
 	ret = clk_prepare_enable(sensor->xclk);
 	if(ret) {
@@ -173,6 +143,19 @@ static int ov8865_set_power_on(struct ov8865_dev *sensor)
 			__func__);
 		return ret;
 	}
+
+	ov8865_power(sensor, true);
+
+	ret = regulator_bulk_enable(OV8865_NUM_SUPPLIES, sensor->supplies);
+	if (ret) {
+		dev_err(&client->dev, "%s: failed to enable regulators\n",
+			__func__);
+		goto xclk_off;
+	}
+
+	ov8865_reset(sensor,true);
+
+	usleep_range(10000,12000);
 	ret = ov8865_init_slave_id(sensor);
 	if(ret)
 		goto power_off;
@@ -192,7 +175,7 @@ static void ov8865_set_power_off(struct ov8865_dev *sensor)
 	regulator_bulk_disable(OV8865_NUM_SUPPLIES, sensor->supplies);
 	clk_disable_unprepare(sensor->xclk);
 }
-/*
+
 static int ov8865_set_power(struct ov8865_dev *sensor, bool on)
 {
 	int ret = 0;
@@ -200,14 +183,19 @@ static int ov8865_set_power(struct ov8865_dev *sensor, bool on)
 	if (on){
 		ret = ov8865_set_power_on(sensor);
 		if (ret)
-			return ret;
+			goto power_off;
 	}else {
 		ov8865_set_power_off(sensor);
 	}
+
 	return 0;
-}*/
+
+power_off:
+	ov8865_set_power_off(sensor);
+	return ret;
+}
 /* --------------- Subdev Operations --------------- */
-/*
+
 static int ov8865_s_power(struct v4l2_subdev *sd, int on)
 {
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
@@ -218,28 +206,33 @@ static int ov8865_s_power(struct v4l2_subdev *sd, int on)
 		ret = ov8865_set_power(sensor, !!on);
 		if (ret)
 			goto out;
-	}*/
+	}
 	/* Update the power count. */
-/*	sensor->power_count += on ? 1 : -1;
+	sensor->power_count += on ? 1 : -1;
 	WARN_ON(sensor->power_count < 0);
 out:
 	mutex_unlock(&sensor->lock);
-*/
-/*	if (on && !ret && sensor->power_count == 1) {
+
+	if (on && !ret && sensor->power_count == 1) {
+		/*initialize hardware*/
 		ret = v4l2_ctrl_handler_setup(&sensor->ctrls.handler);
 	}
-*/
-/*	return ret;
+
+	return ret;
 }
 
 static const struct v4l2_subdev_core_ops ov8865_core_ops = {
 	.s_power = ov8865_s_power,
 };
 
+static const struct v4l2_subdev_video_ops ov8865_video_ops = {
+};
+
 static const struct v4l2_subdev_ops ov8865_subdev_ops = {
 	.core = &ov8865_core_ops,
+	.video = &ov8865_video_ops,
 };
-*/
+
 static int ov8865_get_regulators(struct ov8865_dev *sensor)
 {
 	int i;
@@ -256,29 +249,30 @@ static int ov8865_check_chip_id(struct ov8865_dev *sensor)
 {
 	struct i2c_client *client = sensor->i2c_client;
 	int ret = 0;
-	int i = 0;
-	u16 chip_id = 0xee;
+	u8 chip_id_0, chip_id_1, chip_id_2;
+	u32 chip_id = 0x000000;
 
 	ret = ov8865_set_power_on(sensor);
 	if (ret)
 		return ret;
 
-	ret = ov8865_read_reg16(sensor, OV8865_REG_CHIP_ID, &chip_id);
+	ret = ov8865_read_reg(sensor, OV8865_REG_CHIP_ID, &chip_id_0);
+	ret = ov8865_read_reg(sensor, OV8865_REG_CHIP_ID+1, &chip_id_1);
+	ret = ov8865_read_reg(sensor, OV8865_REG_CHIP_ID+2, &chip_id_2);
 	if (ret) {
 		dev_err(&client->dev, "%s: failed to reach chip identifier\n",
+
 			__func__);
 		goto power_off;
 	}
+	chip_id = ((u32)chip_id_0 << 16) | ((u32)chip_id_1 << 8) | ((u32)chip_id_2);
 
-	if (chip_id != 0x8865) {
+	if (chip_id != 0x008865) {
 		dev_err(&client->dev, "%s: wrong chip identifier, expected 0x8865, got 0x%x\n",__func__, chip_id);
 		ret = -ENXIO;
-	}else{
-		printk("ov8865: bon ID");
 	}
 
 power_off:
-	printk("ov8865: got  0x%x\n", chip_id);
 	ov8865_set_power_off(sensor);
 	return ret;
 }
@@ -296,7 +290,7 @@ static int ov8865_probe(struct i2c_client *client)
 
 	sensor->i2c_client = client;
 	/* get system clock (xclk) */
-	/*sensor->xclk = devm_clk_get(dev, "xclk");
+	sensor->xclk = devm_clk_get(dev, "xclk");
 	if (IS_ERR(sensor->xclk)) {
 		dev_err(dev, "failed to get xclk\n");
 		return PTR_ERR(sensor->xclk);
@@ -308,7 +302,7 @@ static int ov8865_probe(struct i2c_client *client)
 		dev_err(dev, "xclk frequency out of range: %d Hz\n",
 			sensor->xclk_freq);
 		return -EINVAL;
-	}*/
+	}
 	/* request optional power down pin */
 	sensor->pwdn_gpio = devm_gpiod_get_optional(dev, "powerdown",
 						    GPIOD_OUT_HIGH);
@@ -320,9 +314,9 @@ static int ov8865_probe(struct i2c_client *client)
 						     GPIOD_OUT_HIGH);
 	if (IS_ERR(sensor->reset_gpio))
 		return PTR_ERR(sensor->reset_gpio);
-/*
+
 	v4l2_i2c_subdev_init(&sensor->sd, client, &ov8865_subdev_ops);
-	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
+	/*sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
 			    V4L2_SUBDEV_FL_HAS_EVENTS;
 	sensor->pad.flags = MEDIA_PAD_FL_SOURCE;
 	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
@@ -334,7 +328,7 @@ static int ov8865_probe(struct i2c_client *client)
 	if (ret)
 		return ret;
 
-//	mutex_init(&sensor->lock);
+	mutex_init(&sensor->lock);
 
 	ret = ov8865_check_chip_id(sensor);
 	if (ret)
@@ -343,7 +337,7 @@ static int ov8865_probe(struct i2c_client *client)
 
 
 entity_cleanup:
-//	mutex_destroy(&sensor->lock);
+	mutex_destroy(&sensor->lock);
 	return ret;
 }
 
