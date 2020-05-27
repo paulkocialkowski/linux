@@ -100,7 +100,7 @@
 		regulator-max-microvolt = <2800000>;
 		vin-supply = <&reg_dldo4>;
 	};
-	
+
 	reg_ov8865_afvdd: ov8865-afvdd {
 		compatible = "regulator-fixed";
 		regulator-name = "ov8865-afvdd";
@@ -151,6 +151,25 @@
 	assigned-clock-parents = <&osc24M>;
 	assigned-clock-rates = <24000000>;
 };
+
+&csi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&csi_8bit_parallel_pins>;
+	status = "okay";
+};
+
+&csi_in {
+	mipi_csi_from_ov8865: endpoint {
+		remote-endpoint = <&ov8865_to_mipi_csi>;
+		data_lanes = <0>;
+		clock_lane = <1 2>;
+		bus-type = <4>; /*V4L2_FWNODE_BUS_TYPE_CSI2_DPHY*/
+		num_data_lanes = <4>;
+		hsync-active = <0>;
+		vsync-active = <0>;
+		pclk-sample = <1>;
+	};
+};
 /**/
 &de {
 	status = "okay";
@@ -173,6 +192,19 @@
 		powerdown-gpios = <&pio 4 17 GPIO_ACTIVE_LOW>; /* PE17 */
 		reset-gpios = <&pio 4 16 GPIO_ACTIVE_LOW>; /* PE16 */
 		rotation = <180>;
+
+		port {
+			ov8865_to_mipi_csi: endpoint {
+				remote-endpoint = <&mipi_csi_from_ov8865>;
+				data_lanes = <1 2>;
+				clock_lane = <0>;
+				bus-type = <4>;
+				num_data_lanes = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				pclk-sample = <1>;
+			};
+		};
 	};
 };
 /**/

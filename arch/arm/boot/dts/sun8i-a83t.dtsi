@@ -1029,8 +1029,9 @@
 			interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_BUS_CSI>,
 				 <&ccu CLK_CSI_SCLK>,
-				 <&ccu CLK_DRAM_CSI>;
-			clock-names = "bus", "mod", "ram";
+				 <&ccu CLK_DRAM_CSI>,
+				 <&ccu CLK_MIPI_CSI>;
+			clock-names = "bus", "mod", "ram", "dphy";
 			resets = <&ccu RST_BUS_CSI>;
 			status = "disabled";
 
@@ -1038,6 +1039,17 @@
 			};
 		};
 
+		/*mipi_csi: camera@1cb1000 {
+			compatible = "allwinner,sun8i-a83t-mipi-csi";
+			reg = <0x01cb1000 0x1000>;
+			clocks = <&ccu CLK_MIPI_CSI>;
+			clock-names ="mod";
+			status = "disabled";
+
+			mipi_csi_in: port {
+			};
+		};
+*/
 		hdmi: hdmi@1ee0000 {
 			compatible = "allwinner,sun8i-a83t-dw-hdmi";
 			reg = <0x01ee0000 0x10000>;
