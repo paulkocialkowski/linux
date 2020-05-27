@@ -26,20 +26,9 @@
 
 #include "sun6i_csi.h"
 #include "sun6i_csi_reg.h"
+#include "sun6i_mipi_csi.h"
 
 #define MODULE_NAME	"sun6i-csi"
-
-struct sun6i_csi_dev {
-	struct sun6i_csi		csi;
-	struct device			*dev;
-
-	struct regmap			*regmap;
-	struct clk			*clk_mod;
-	struct clk			*clk_ram;
-	struct reset_control		*rstc_bus;
-
-	int				planar_offset[3];
-};
 
 static inline struct sun6i_csi_dev *sun6i_csi_to_dev(struct sun6i_csi *csi)
 {
@@ -51,6 +40,14 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
 				   u32 pixformat, u32 mbus_code)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
+
+	if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
+		if(!sdev->clk_dphy){
+			dev_err(sdev->dev, "Use MIPI-CSI2 device on none DPHY receiver\n");
+			return false;
+		}
+		return true;
+	}
 
 	/*
 	 * Some video receivers have the ability to be compatible with
@@ -433,29 +430,34 @@ static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 		if (flags & V4L2_MBUS_PCLK_SAMPLE_FALLING)
 			cfg |= CSI_IF_CFG_CLK_POL_FALLING_EDGE;
 		break;
+	case V4L2_MBUS_CSI2_DPHY:
+		cfg |= CSI_IF_CFG_MIPI_IF_MIPI;
+		sun6i_mipi_csi_setup_bus(csi);
+		break;
 	default:
 		dev_warn(sdev->dev, "Unsupported bus type: %d\n",
 			 endpoint->bus_type);
 		break;
 	}
 
-	switch (bus_width) {
-	case 8:
-		cfg |= CSI_IF_CFG_IF_DATA_WIDTH_8BIT;
-		break;
-	case 10:
-		cfg |= CSI_IF_CFG_IF_DATA_WIDTH_10BIT;
-		break;
-	case 12:
-		cfg |= CSI_IF_CFG_IF_DATA_WIDTH_12BIT;
-		break;
-	case 16: /* No need to configure DATA_WIDTH for 16bit */
-		break;
-	default:
-		dev_warn(sdev->dev, "Unsupported bus width: %u\n", bus_width);
-		break;
+	if(endpoint->bus_type != V4L2_MBUS_CSI2_DPHY) {
+		switch (bus_width) {
+		case 8:
+			cfg |= CSI_IF_CFG_IF_DATA_WIDTH_8BIT;
+			break;
+		case 10:
+			cfg |= CSI_IF_CFG_IF_DATA_WIDTH_10BIT;
+			break;
+		case 12:
+			cfg |= CSI_IF_CFG_IF_DATA_WIDTH_12BIT;
+			break;
+		case 16: /* No need to configure DATA_WIDTH for 16bit */
+			break;
+		default:
+			dev_warn(sdev->dev, "Unsupported bus width: %u\n", bus_width);
+			break;
+		}
 	}
-
 	regmap_write(sdev->regmap, CSI_IF_CFG_REG, cfg);
 }
 
@@ -605,6 +607,9 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 	struct regmap *regmap = sdev->regmap;
 
 	if (!enable) {
+		if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
+			sun6i_mipi_csi_set_stream(csi, 0);
+		}
 		regmap_update_bits(regmap, CSI_CAP_REG, CSI_CAP_CH0_VCAP_ON, 0);
 		regmap_write(regmap, CSI_CH_INT_EN_REG, 0);
 		return;
@@ -621,6 +626,9 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 
 	regmap_update_bits(regmap, CSI_CAP_REG, CSI_CAP_CH0_VCAP_ON,
 			   CSI_CAP_CH0_VCAP_ON);
+	if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
+		sun6i_mipi_csi_set_stream(csi, 1);
+	}
 }
 
 /* -----------------------------------------------------------------------------
@@ -704,6 +712,7 @@ static int sun6i_csi_fwnode_parse(struct device *dev,
 	}
 
 	switch (vep->bus_type) {
+	case V4L2_MBUS_CSI2_DPHY:
 	case V4L2_MBUS_PARALLEL:
 	case V4L2_MBUS_BT656:
 		csi->v4l2_ep = *vep;
@@ -857,6 +866,12 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 	if (IS_ERR(sdev->clk_ram)) {
 		dev_err(&pdev->dev, "Unable to acquire dram-csi clock\n");
 		return PTR_ERR(sdev->clk_ram);
+	}
+
+	sdev->clk_dphy = devm_clk_get(&pdev->dev, "dphy");
+	if (IS_ERR(sdev->clk_dphy)) {
+		sdev->clk_dphy = NULL;
+		dev_warn(&pdev->dev, "Unable to acquire dphy-csi clock. No MIPI-CSI2 support.\n");
 	}
 
 	sdev->rstc_bus = devm_reset_control_get_shared(&pdev->dev, NULL);
