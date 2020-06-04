@@ -7,7 +7,7 @@
  * Contacts: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
  *	     Sakari Ailus <sakari.ailus@iki.fi>
  */
-
+#define DEBUG
 #include <linux/bitmap.h>
 #include <linux/property.h>
 #include <linux/slab.h>
@@ -358,8 +358,8 @@ struct media_entity *media_graph_walk_next(struct media_graph *graph)
 		media_graph_walk_iter(graph);
 
 	entity = stack_pop(graph);
-	dev_dbg(entity->graph_obj.mdev->dev,
-		"walk: returning entity '%s'\n", entity->name);
+	/*dev_dbg(entity->graph_obj.mdev->dev,*/
+		printk("walk: returning entity '%s'\n", entity->name);
 
 	return entity;
 }
@@ -412,13 +412,13 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 	struct media_entity *entity_err = entity;
 	struct media_link *link;
 	int ret;
-
+	printk("debug start pipe\n");
 	if (!pipe->streaming_count++) {
 		ret = media_graph_walk_init(&pipe->graph, mdev);
 		if (ret)
 			goto error_graph_walk_start;
 	}
-
+	printk("debug pipe 1\n");
 	media_graph_walk_start(&pipe->graph, entity);
 
 	while ((entity = media_graph_walk_next(graph))) {
@@ -426,50 +426,63 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 		DECLARE_BITMAP(has_no_links, MEDIA_ENTITY_MAX_PADS);
 
 		entity->stream_count++;
-
+		printk("debug pipe 2\n");
 		if (entity->pipe && entity->pipe != pipe) {
-			pr_err("Pipe active for %s. Can't start for %s\n",
+			/*pr_err*/printk("Pipe active for %s. Can't start for %s\n",
 				entity->name,
 				entity_err->name);
 			ret = -EBUSY;
 			goto error;
 		}
-
+		printk("debug pipe 3\n");
 		entity->pipe = pipe;
 
 		/* Already streaming --- no need to check. */
-		if (entity->stream_count > 1)
+		if (entity->stream_count > 1){
+			printk("debug pipe 4\n");
 			continue;
-
-		if (!entity->ops || !entity->ops->link_validate)
+		}
+		printk("name:%s\n",entity->name);
+		printk("stream_count:%d\n",entity->stream_count);
+		printk("ops:%#x\n",entity->ops);
+		//printk("link_validate:%#x\n",entity->ops->link_validate);
+		if (!entity->ops || !entity->ops->link_validate){
+			printk("debug pipe 5\n");
 			continue;
-
+		}
+		printk("debug pipe 6\n");
 		bitmap_zero(active, entity->num_pads);
 		bitmap_fill(has_no_links, entity->num_pads);
 
 		list_for_each_entry(link, &entity->links, list) {
+			printk("debug 6,5\n");
 			struct media_pad *pad = link->sink->entity == entity
 						? link->sink : link->source;
 
 			/* Mark that a pad is connected by a link. */
 			bitmap_clear(has_no_links, pad->index, 1);
-
+			printk("pad_flag = %ld\n",pad->flags);
+			printk("link_flag = %ld\n",link->flags);
 			/*
 			 * Pads that either do not need to connect or
 			 * are connected through an enabled link are
 			 * fine.
 			 */
 			if (!(pad->flags & MEDIA_PAD_FL_MUST_CONNECT) ||
-			    link->flags & MEDIA_LNK_FL_ENABLED)
+			    link->flags & MEDIA_LNK_FL_ENABLED){
+				printk("debug pipe 7\n");
 				bitmap_set(active, pad->index, 1);
+			}
 
 			/*
 			 * Link validation will only take place for
 			 * sink ends of the link that are enabled.
 			 */
 			if (link->sink != pad ||
-			    !(link->flags & MEDIA_LNK_FL_ENABLED))
+			    !(link->flags & MEDIA_LNK_FL_ENABLED)){
+				printk("debug pipe 8\n");
 				continue;
+			}
 
 			ret = entity->ops->link_validate(link);
 			if (ret < 0 && ret != -ENOIOCTLCMD) {
@@ -495,7 +508,7 @@ __must_check int __media_pipeline_start(struct media_entity *entity,
 			goto error;
 		}
 	}
-
+	printk("debug pipe no error\n");
 	return 0;
 
 error:
@@ -504,7 +517,7 @@ error:
 	 * return the error.
 	 */
 	media_graph_walk_start(graph, entity_err);
-
+	printk("debug pipe error\n");
 	while ((entity_err = media_graph_walk_next(graph))) {
 		/* Sanity check for negative stream_count */
 		if (!WARN_ON_ONCE(entity_err->stream_count <= 0)) {
@@ -534,7 +547,7 @@ __must_check int media_pipeline_start(struct media_entity *entity,
 {
 	struct media_device *mdev = entity->graph_obj.mdev;
 	int ret;
-
+	printk("debug launch function pipe\n");
 	mutex_lock(&mdev->graph_mutex);
 	ret = __media_pipeline_start(entity, pipe);
 	mutex_unlock(&mdev->graph_mutex);

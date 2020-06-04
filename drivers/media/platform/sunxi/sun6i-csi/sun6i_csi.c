@@ -4,7 +4,7 @@
  * All rights reserved.
  * Author: Yong Deng <yong.deng@magewell.com>
  */
-
+#define DEBUG
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -40,7 +40,7 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
 				   u32 pixformat, u32 mbus_code)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
-
+	printk("sun6i_csi_is_format_supported\n");
 	if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
 		if(!sdev->clk_dphy){
 			dev_err(sdev->dev, "Use MIPI-CSI2 device on none DPHY receiver\n");
@@ -164,7 +164,7 @@ int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable)
 	struct device *dev = sdev->dev;
 	struct regmap *regmap = sdev->regmap;
 	int ret;
-
+	printk("sun6i_csi_set_power\n");
 	if (!enable) {
 		regmap_update_bits(regmap, CSI_EN_REG, CSI_EN_CSI_EN, 0);
 
@@ -214,7 +214,7 @@ clk_mod_disable:
 static enum csi_input_fmt get_csi_input_format(struct sun6i_csi_dev *sdev,
 					       u32 mbus_code, u32 pixformat)
 {
-	/* non-YUV */
+	/* non-YUV */printk("get_csi_input_format\n");
 	if ((mbus_code & 0xF000) != 0x2000)
 		return CSI_INPUT_FORMAT_RAW;
 
@@ -237,7 +237,7 @@ static enum csi_output_fmt get_csi_output_format(struct sun6i_csi_dev *sdev,
 						 u32 pixformat, u32 field)
 {
 	bool buf_interlaced = false;
-
+	printk("get_csi_output_format\n");
 	if (field == V4L2_FIELD_INTERLACED
 	    || field == V4L2_FIELD_INTERLACED_TB
 	    || field == V4L2_FIELD_INTERLACED_BT)
@@ -304,6 +304,7 @@ static enum csi_input_seq get_csi_input_seq(struct sun6i_csi_dev *sdev,
 					    u32 mbus_code, u32 pixformat)
 {
 	/* Input sequence does not apply to non-YUV formats */
+	printk("get_csi_input_seq\n");
 	if ((mbus_code & 0xF000) != 0x2000)
 		return 0;
 
@@ -369,6 +370,7 @@ static enum csi_input_seq get_csi_input_seq(struct sun6i_csi_dev *sdev,
 
 static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 {
+	printk("sun6i_csi_setup_bus\n");
 	struct v4l2_fwnode_endpoint *endpoint = &sdev->csi.v4l2_ep;
 	struct sun6i_csi *csi = &sdev->csi;
 	unsigned char bus_width;
@@ -466,7 +468,7 @@ static void sun6i_csi_set_format(struct sun6i_csi_dev *sdev)
 	struct sun6i_csi *csi = &sdev->csi;
 	u32 cfg;
 	u32 val;
-
+	printk("sun6i_csi_set_format\n");
 	regmap_read(sdev->regmap, CSI_CH_CFG_REG, &cfg);
 
 	cfg &= ~(CSI_CH_CFG_INPUT_FMT_MASK |
@@ -505,7 +507,7 @@ static void sun6i_csi_set_window(struct sun6i_csi_dev *sdev)
 	u32 width = config->width;
 	u32 height = config->height;
 	u32 hor_len = width;
-
+	printk("sun6i_csi_set_window\n");
 	switch (config->pixelformat) {
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
@@ -574,7 +576,7 @@ int sun6i_csi_update_config(struct sun6i_csi *csi,
 			    struct sun6i_csi_config *config)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
-
+	printk("sun6i_csi_update_config\n");
 	if (!config)
 		return -EINVAL;
 
@@ -590,7 +592,7 @@ int sun6i_csi_update_config(struct sun6i_csi *csi,
 void sun6i_csi_update_buf_addr(struct sun6i_csi *csi, dma_addr_t addr)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
-
+	printk("sun6i_csi_update_buf_addr\n");
 	regmap_write(sdev->regmap, CSI_CH_F0_BUFA_REG,
 		     (addr + sdev->planar_offset[0]) >> 2);
 	if (sdev->planar_offset[1] != -1)
@@ -605,7 +607,7 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
 	struct regmap *regmap = sdev->regmap;
-
+	printk("sun6i_csi_set_stream\n");
 	if (!enable) {
 		if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
 			sun6i_mipi_csi_set_stream(csi, 0);
@@ -642,7 +644,7 @@ static int sun6i_csi_link_entity(struct sun6i_csi *csi,
 	struct media_pad *sink_pad;
 	int src_pad_index;
 	int ret;
-
+	printk("sun6i_csi_link_entity\n");
 	ret = media_entity_get_fwnode_pad(entity, fwnode, MEDIA_PAD_FL_SOURCE);
 	if (ret < 0) {
 		dev_err(csi->dev, "%s: no source pad in external entity %s\n",
@@ -678,7 +680,7 @@ static int sun6i_subdev_notify_complete(struct v4l2_async_notifier *notifier)
 	struct v4l2_device *v4l2_dev = &csi->v4l2_dev;
 	struct v4l2_subdev *sd;
 	int ret;
-
+	printk("sun6i_subdev_notify_complete\n");
 	dev_dbg(csi->dev, "notify complete, all subdevs registered\n");
 
 	sd = list_first_entry(&v4l2_dev->subdevs, struct v4l2_subdev, list);
@@ -705,12 +707,12 @@ static int sun6i_csi_fwnode_parse(struct device *dev,
 				  struct v4l2_async_subdev *asd)
 {
 	struct sun6i_csi *csi = dev_get_drvdata(dev);
-
+	printk("sun6i_csi_fwnode_parse\n");
 	if (vep->base.port || vep->base.id) {
 		dev_warn(dev, "Only support a single port with one endpoint\n");
 		return -ENOTCONN;
 	}
-
+	printk("bus_type = %d",vep->bus_type);
 	switch (vep->bus_type) {
 	case V4L2_MBUS_CSI2_DPHY:
 	case V4L2_MBUS_PARALLEL:
@@ -737,7 +739,7 @@ static void sun6i_csi_v4l2_cleanup(struct sun6i_csi *csi)
 static int sun6i_csi_v4l2_init(struct sun6i_csi *csi)
 {
 	int ret;
-
+	printk("sun6i_csi_v4l2_init\n");
 	csi->media_dev.dev = csi->dev;
 	strscpy(csi->media_dev.model, "Allwinner Video Capture Device",
 		sizeof(csi->media_dev.model));
@@ -804,7 +806,7 @@ static irqreturn_t sun6i_csi_isr(int irq, void *dev_id)
 	struct sun6i_csi_dev *sdev = (struct sun6i_csi_dev *)dev_id;
 	struct regmap *regmap = sdev->regmap;
 	u32 status;
-
+	printk("sun6i_csi_isr\n");
 	regmap_read(regmap, CSI_CH_INT_STA_REG, &status);
 
 	if (!(status & 0xFF))
@@ -843,7 +845,7 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 	void __iomem *io_base;
 	int ret;
 	int irq;
-
+	printk("sun6i_csi_resource_request\n");
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	io_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(io_base))
@@ -906,7 +908,7 @@ static int sun6i_csi_probe(struct platform_device *pdev)
 {
 	struct sun6i_csi_dev *sdev;
 	int ret;
-
+	dev_dbg(&pdev->dev, "csi probe\n");
 	sdev = devm_kzalloc(&pdev->dev, sizeof(*sdev), GFP_KERNEL);
 	if (!sdev)
 		return -ENOMEM;

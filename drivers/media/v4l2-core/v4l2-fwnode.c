@@ -27,7 +27,7 @@
 #include <media/v4l2-async.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
-
+#define DEBUG
 enum v4l2_fwnode_bus_type {
 	V4L2_FWNODE_BUS_TYPE_GUESS = 0,
 	V4L2_FWNODE_BUS_TYPE_CSI2_CPHY,
@@ -141,26 +141,28 @@ static int v4l2_fwnode_endpoint_parse_csi2_bus(struct fwnode_handle *fwnode,
 	unsigned int i;
 	u32 v;
 	int rval;
-
+	printk("v4l2_fwnode_endpoint_parse_csi2_bus\n");
 	if (bus_type == V4L2_MBUS_CSI2_DPHY ||
 	    bus_type == V4L2_MBUS_CSI2_CPHY) {
 		use_default_lane_mapping = true;
 
 		num_data_lanes = min_t(u32, bus->num_data_lanes,
 				       V4L2_FWNODE_CSI2_MAX_DATA_LANES);
-
+		printk("num_data_lanes=%d\n",num_data_lanes);
 		clock_lane = bus->clock_lane;
+		printk("clock_lane=%d\n",clock_lane);
 		if (clock_lane)
 			use_default_lane_mapping = false;
 
 		for (i = 0; i < num_data_lanes; i++) {
 			array[i] = bus->data_lanes[i];
+			printk("array[%d]=%d\n",i,array[i]);
 			if (array[i])
 				use_default_lane_mapping = false;
 		}
 
 		if (use_default_lane_mapping)
-			pr_debug("no lane mapping given, using defaults\n");
+			/*pr_debug*/printk("no lane mapping given, using defaults\n");
 	}
 
 	rval = fwnode_property_count_u32(fwnode, "data-lanes");
@@ -173,7 +175,7 @@ static int v4l2_fwnode_endpoint_parse_csi2_bus(struct fwnode_handle *fwnode,
 
 		have_data_lanes = true;
 		if (use_default_lane_mapping) {
-			pr_debug("data-lanes property exists; disabling default mapping\n");
+			/*pr_debug*/printk("data-lanes property exists; disabling default mapping\n");
 			use_default_lane_mapping = false;
 		}
 	}
@@ -181,20 +183,20 @@ static int v4l2_fwnode_endpoint_parse_csi2_bus(struct fwnode_handle *fwnode,
 	for (i = 0; i < num_data_lanes; i++) {
 		if (lanes_used & BIT(array[i])) {
 			if (have_data_lanes || !use_default_lane_mapping)
-				pr_warn("duplicated lane %u in data-lanes, using defaults\n",
+				/*pr_warn*/printk("duplicated lane %u in data-lanes, using defaults\n",
 					array[i]);
 			use_default_lane_mapping = true;
 		}
 		lanes_used |= BIT(array[i]);
 
 		if (have_data_lanes)
-			pr_debug("lane %u position %u\n", i, array[i]);
+			/*pr_debug*/printk("lane %u position %u\n", i, array[i]);
 	}
 
 	rval = fwnode_property_count_u32(fwnode, "lane-polarities");
 	if (rval > 0) {
 		if (rval != 1 + num_data_lanes /* clock+data */) {
-			pr_warn("invalid number of lane-polarities entries (need %u, got %u)\n",
+			/*pr_warn*/printk("invalid number of lane-polarities entries (need %u, got %u)\n",
 				1 + num_data_lanes, rval);
 			return -EINVAL;
 		}
@@ -204,20 +206,20 @@ static int v4l2_fwnode_endpoint_parse_csi2_bus(struct fwnode_handle *fwnode,
 
 	if (!fwnode_property_read_u32(fwnode, "clock-lanes", &v)) {
 		clock_lane = v;
-		pr_debug("clock lane position %u\n", v);
+		/*pr_debug*/printk("clock lane position %u\n", v);
 		have_clk_lane = true;
 	}
 
 	if (have_clk_lane && lanes_used & BIT(clock_lane) &&
 	    !use_default_lane_mapping) {
-		pr_warn("duplicated lane %u in clock-lanes, using defaults\n",
+		/*pr_warn*/printk("duplicated lane %u in clock-lanes, using defaults\n",
 			v);
 		use_default_lane_mapping = true;
 	}
 
 	if (fwnode_property_present(fwnode, "clock-noncontinuous")) {
 		flags |= V4L2_MBUS_CSI2_NONCONTINUOUS_CLOCK;
-		pr_debug("non-continuous clock\n");
+		/*pr_debug*/printk("non-continuous clock\n");
 	} else {
 		flags |= V4L2_MBUS_CSI2_CONTINUOUS_CLOCK;
 	}
@@ -251,11 +253,11 @@ static int v4l2_fwnode_endpoint_parse_csi2_bus(struct fwnode_handle *fwnode,
 
 			for (i = 0; i < 1 + num_data_lanes; i++) {
 				bus->lane_polarities[i] = array[i];
-				pr_debug("lane %u polarity %sinverted",
+				/*pr_debug*/printk("lane %u polarity %sinverted",
 					 i, array[i] ? "" : "not ");
 			}
 		} else {
-			pr_debug("no lane polarities defined, assuming not inverted\n");
+			/*pr_debug*/printk("no lane polarities defined, assuming not inverted\n");
 		}
 	}
 
@@ -415,7 +417,7 @@ static int __v4l2_fwnode_endpoint_parse(struct fwnode_handle *fwnode,
 	u32 bus_type = V4L2_FWNODE_BUS_TYPE_GUESS;
 	enum v4l2_mbus_type mbus_type;
 	int rval;
-
+	printk("v4l2_fwnode_endpoint_parse %pfw\n", fwnode); 	
 	if (vep->bus_type == V4L2_MBUS_UNKNOWN) {
 		/* Zero fields from bus union to until the end */
 		memset(&vep->bus, 0,
@@ -431,7 +433,7 @@ static int __v4l2_fwnode_endpoint_parse(struct fwnode_handle *fwnode,
 	memset(&vep->base, 0, sizeof(vep->base));
 
 	fwnode_property_read_u32(fwnode, "bus-type", &bus_type);
-	pr_debug("fwnode video bus type %s (%u), mbus type %s (%u)\n",
+	/*pr_debug*/printk("fwnode video bus type %s (%u), mbus type %s (%u)\n",
 		 v4l2_fwnode_bus_type_to_string(bus_type), bus_type,
 		 v4l2_fwnode_mbus_type_to_string(vep->bus_type),
 		 vep->bus_type);
@@ -445,11 +447,13 @@ static int __v4l2_fwnode_endpoint_parse(struct fwnode_handle *fwnode,
 			return -ENXIO;
 		}
 	} else {
+		printk("debug 1");
 		vep->bus_type = mbus_type;
 	}
 
 	switch (vep->bus_type) {
 	case V4L2_MBUS_UNKNOWN:
+		printk("debug 2");
 		rval = v4l2_fwnode_endpoint_parse_csi2_bus(fwnode, vep,
 							   V4L2_MBUS_UNKNOWN);
 		if (rval)
@@ -459,7 +463,7 @@ static int __v4l2_fwnode_endpoint_parse(struct fwnode_handle *fwnode,
 			v4l2_fwnode_endpoint_parse_parallel_bus(fwnode, vep,
 								V4L2_MBUS_UNKNOWN);
 
-		pr_debug("assuming media bus type %s (%u)\n",
+		/*pr_debug*/printk("assuming media bus type %s (%u)\n",
 			 v4l2_fwnode_mbus_type_to_string(vep->bus_type),
 			 vep->bus_type);
 
@@ -471,6 +475,7 @@ static int __v4l2_fwnode_endpoint_parse(struct fwnode_handle *fwnode,
 		break;
 	case V4L2_MBUS_CSI2_DPHY:
 	case V4L2_MBUS_CSI2_CPHY:
+		printk("debug 3");
 		rval = v4l2_fwnode_endpoint_parse_csi2_bus(fwnode, vep,
 							   vep->bus_type);
 		if (rval)
@@ -499,7 +504,7 @@ int v4l2_fwnode_endpoint_parse(struct fwnode_handle *fwnode,
 	int ret;
 
 	ret = __v4l2_fwnode_endpoint_parse(fwnode, vep);
-
+	printk("===== end parsing endpoint %pfw\n", fwnode);
 	pr_debug("===== end V4L2 endpoint properties\n");
 
 	return ret;

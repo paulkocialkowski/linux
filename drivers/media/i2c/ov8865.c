@@ -571,7 +571,7 @@ static int ov8865_set_timings(struct ov8865_dev *sensor,
 			      const struct ov8865_mode_info *mode)
 {
 	int ret;
-
+	printk("ov8865_set_timings\n");
 	ret = ov8865_write_reg16(sensor, OV8865_REG_X_OUTPUT_SIZE, mode->hact);
 	if (ret < 0)
 		return ret;
@@ -596,7 +596,7 @@ static int ov8865_load_regs(struct ov8865_dev *sensor,
 	u16 reg_addr;
 	u8 val;
 	int ret = 0;
-
+	printk("ov8865_load_regs\n");
 	for (i=0; i < mode->reg_data_size; i++, regs++) {//++i,++regs
 		delay_ms = regs->delay_ms;
 		reg_addr = regs->reg_addr;
@@ -618,7 +618,7 @@ ov8865_find_mode(struct ov8865_dev *sensor, enum ov8865_frame_rate fr,
 		 int width, int height, bool nearest)
 {
 	const struct ov8865_mode_info *mode;
-
+	printk("ov8865_find_mode\n");
 	mode = v4l2_find_nearest_size(ov8865_mode_data,
 				      ARRAY_SIZE(ov8865_mode_data),
 				      hact, vact, width, height);
@@ -728,7 +728,7 @@ static int ov8865_set_mode_direct(struct ov8865_dev *sensor,
 {
 	if (!mode->reg_data)
 		return -EINVAL;
-
+	printk("ov8865_set_mode_direct\n");
 	/*Write capture setting*/
 	return ov8865_load_regs(sensor, mode);
 }
@@ -736,7 +736,7 @@ static int ov8865_set_mode_direct(struct ov8865_dev *sensor,
 static int ov8865_set_pclk(struct ov8865_dev *sensor)
 {
 	int ret;
-
+	printk("ov8865_set_pclk\n");
 	ret = ov8865_write_reg(sensor, OV8865_REG_PLL_CTRL2, PLL1_MULTIPLIER);
 	if (ret)
 		return ret;
@@ -759,7 +759,7 @@ static int ov8865_set_sclk(struct ov8865_dev *sensor)
 {
 	const struct ov8865_mode_info * mode = sensor->current_mode;
 	int ret;
-
+	printk("ov8865_set_sclk\n");
 	if ((mode->id  == OV8865_MODE_UXGA_1600_1200)||
 	    (mode->id == OV8865_MODE_720P_1280_720)||
 	    (mode->id == OV8865_MODE_SVGA_800_600))
@@ -798,7 +798,7 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	//bool auto_exp =  sensor->ctrls.auto_exp->val == V4L2_EXPOSURE_AUTO;
 	unsigned long rate;
 	int ret;
-
+	printk("ov8865_set_mode\n");
 	//dn_mode = mode->dn_mode;
 	//orig_dn_mode = orig_mode->dn_mode;
 
@@ -881,7 +881,7 @@ restore_auto_gain:
 static int ov8865_restore_mode(struct ov8865_dev *sensor)
 {
 	int ret;
-
+	printk("ov8865_restore_mode\n");
 	ret = ov8865_load_regs(sensor, &ov8865_mode_init_data);
 	if (ret)
 		return ret;
@@ -906,7 +906,7 @@ static int ov8865_set_power_on(struct ov8865_dev *sensor)
 {
 	struct i2c_client *client = sensor->i2c_client;
 	int ret = 0;
-
+	printk("ov8865_set_power_on\n");
 	ov8865_power(sensor, false);
 	ov8865_reset(sensor,false);
 
@@ -952,7 +952,7 @@ static void ov8865_set_power_off(struct ov8865_dev *sensor)
 static int ov8865_set_power(struct ov8865_dev *sensor, bool on)
 {
 	int ret = 0;
-
+	printk("ov8865_set_power\n");
 	if (on){
 		ret = ov8865_set_power_on(sensor);
 		if (ret)
@@ -977,7 +977,7 @@ static int ov8865_s_power(struct v4l2_subdev *sd, int on)
 {
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
 	int ret = 0;
-
+	printk("ov8865_s_power\n");
 	mutex_lock(&sensor->lock);
 	if (sensor->power_count == !on) {
 		ret = ov8865_set_power(sensor, !!on);
@@ -1006,7 +1006,7 @@ static int ov8865_try_frame_interval(struct ov8865_dev *sensor,
 	enum ov8865_frame_rate rate = OV8865_30_FPS;
 	int minfps, maxfps, best_fps, fps;
 	int i;
-
+	printk("ov8865_try_frame_interval\n");
 	minfps = ov8865_framerates[OV8865_30_FPS];
 	maxfps = ov8865_framerates[OV8865_90_FPS];
 
@@ -1045,7 +1045,7 @@ static int ov8865_try_fmt_internal(struct v4l2_subdev *sd,
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
 	const struct ov8865_mode_info *mode;
 	int i;
-
+	printk("ov8865_try_fmt_internal\n");
 	mode = ov8865_find_mode(sensor, fr, fmt->width, fmt->height, true);
 	if (!mode)
 		return -EINVAL;
@@ -1076,7 +1076,7 @@ static int ov8865_get_fmt(struct v4l2_subdev *sd,
 {
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
 	struct v4l2_mbus_framefmt *fmt;
-
+	printk("ov8865_get_fmt\n");
 	if (format->pad != 0)
 		return -EINVAL;
 
@@ -1100,7 +1100,7 @@ static int ov8865_set_fmt(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *mbus_fmt = &format->format;
 	struct v4l2_mbus_framefmt *fmt;
 	int ret;
-
+	printk("ov8865_set_fmt\n");
 	if (format->pad != 0)
 		return -EINVAL;
 
@@ -1151,6 +1151,7 @@ static int ov8865_enum_frame_size(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_pad_config *cfg,
 				  struct v4l2_subdev_frame_size_enum *fse)
 {
+	printk("ov8865_enum_frame_size\n");
 	if (fse->pad != 0)
 		return -EINVAL;
 	if (fse->index >= OV8865_NUM_MODES)
@@ -1172,7 +1173,7 @@ static int ov8865_enum_frame_interval(struct v4l2_subdev *sd,
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
 	struct v4l2_fract tpf;
 	int ret;
-
+	printk("ov8865_enum_frame_interval\n");
 	if (fie->pad != 0)
 		return -EINVAL;
 	if (fie->index >= OV8865_NUM_FRAMERATES)
@@ -1194,7 +1195,7 @@ static int ov8865_g_frame_interval(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_frame_interval *fi)
 {
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
-
+	printk("ov8865_g_frame_interval\n");
 	mutex_lock(&sensor->lock);
 	fi->interval = sensor->frame_interval;
 	mutex_unlock(&sensor->lock);
@@ -1208,7 +1209,7 @@ static int ov8865_s_frame_interval(struct v4l2_subdev *sd,
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
 	const struct ov8865_mode_info *mode;
 	int frame_rate, ret = 0;
-
+	printk("ov8865_s_frame_interval\n");
 	if (fi->pad !=0)
 		return -EINVAL;
 
@@ -1254,6 +1255,7 @@ static int ov8865_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_pad_config *cfg,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
+	printk("ov8865_enum_mbus_code\n");
 	if (code->pad != 0)
 		return -EINVAL;
 	if (code->index >= ARRAY_SIZE(ov8865_formats))
@@ -1267,7 +1269,7 @@ static int ov8865_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
 	int ret = 0;
-
+	printk("ov8865_s_stream\n");
 	mutex_lock(&sensor->lock);
 
 	if (sensor->streaming == !enable) {
@@ -1329,7 +1331,7 @@ static const struct v4l2_subdev_ops ov8865_subdev_ops = {
 static int ov8865_get_regulators(struct ov8865_dev *sensor)
 {
 	int i;
-
+	printk("ov8865_get_regulators\n");
 	for (i = 0; i < OV8865_NUM_SUPPLIES; i++)
 		sensor->supplies[i].supply = ov8865_supply_name[i];
 
@@ -1344,7 +1346,7 @@ static int ov8865_check_chip_id(struct ov8865_dev *sensor)
 	int ret = 0;
 	u8 chip_id_0, chip_id_1, chip_id_2;
 	u32 chip_id = 0x000000;
-
+	printk("ov8865_check_chip_id\n");
 	ret = ov8865_set_power_on(sensor);
 	if (ret)
 		return ret;

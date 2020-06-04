@@ -138,24 +138,28 @@ static int sun6i_video_start_streaming(struct vb2_queue *vq, unsigned int count)
 	struct v4l2_subdev *subdev;
 	unsigned long flags;
 	int ret;
-	printk("debug 1");
+	printk("debug 1\n");
 	video->sequence = 0;
 	//video->mbus_code=23;
 		printk("mbus_code = %d\n", video->mbus_code);
+		printk("start_ops:%#x\n",video->vdev.entity.ops);
+		printk("name = %s\n", video->vdev.entity.name);
+		printk("start_link_validate:%#x\n",video->vdev.entity.ops->link_validate);
 	ret = media_pipeline_start(&video->vdev.entity, &video->vdev.pipe);
 	if (ret < 0){
-		printk("debug 2");
+		printk("debug 2\n");
 		goto clear_dma_queue;
 	}
+	printk("mbus_code = %d\n", video->mbus_code);
 	if (video->mbus_code == 0) {
 		ret = -EINVAL;
-		printk("debug 3");
+		printk("debug 3\n");
 		goto stop_media_pipeline;
 	}
 
 	subdev = sun6i_video_remote_subdev(video, NULL);
 	if (!subdev){
-		printk("debug 4");
+		printk("debug 4\n");
 		goto stop_media_pipeline;
 	}
 	config.pixelformat = video->fmt.fmt.pix.pixelformat;
@@ -166,7 +170,7 @@ static int sun6i_video_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 	ret = sun6i_csi_update_config(video->csi, &config);
 	if (ret < 0){
-		printk("debug 5");
+		printk("debug 5\n");
 		goto stop_media_pipeline;
 	}
 	spin_lock_irqsave(&video->dma_queue_lock, flags);
