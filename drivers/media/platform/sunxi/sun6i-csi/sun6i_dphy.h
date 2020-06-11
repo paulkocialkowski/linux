@@ -11,5 +11,7 @@
 #include "sun6i_csi.h"
 
 void sun6i_mipi_csi_dphy_init(struct sun6i_csi_dev *sdev);
+void sun6i_dphy_enable(struct sun6i_csi_dev *sdev);
+void sun6i_dphy_disable(struct sun6i_csi_dev *sdev);
 
 #endif /* __SUN6I_DPHY_H__ */

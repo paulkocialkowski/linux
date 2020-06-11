@@ -501,6 +501,7 @@ static int ov8865_write_reg(struct ov8865_dev *sensor, u16 reg, u8 val)
 	msg.len = sizeof(buf);
 
 	ret = i2c_transfer(client->adapter, &msg, 1);
+
 	if (ret < 0) {
 		dev_err(&client->dev, "%s: error: reg=%x, val=%x\n",
 			__func__, reg, val);
@@ -597,6 +598,7 @@ static int ov8865_load_regs(struct ov8865_dev *sensor,
 	u8 val;
 	int ret = 0;
 	printk("ov8865_load_regs\n");
+
 	for (i=0; i < mode->reg_data_size; i++, regs++) {//++i,++regs
 		delay_ms = regs->delay_ms;
 		reg_addr = regs->reg_addr;
@@ -794,7 +796,7 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	const struct ov8865_mode_info *mode = sensor->current_mode;
 	const struct ov8865_mode_info *orig_mode = sensor->last_mode;
 	//enum ov8865_downsize_mode dn_mode, orig_dn_mode;
-	bool auto_gain = sensor->ctrls.auto_gain->val == 1;
+	bool auto_gain = 1;//sensor->ctrls.auto_gain->val == 1;
 	//bool auto_exp =  sensor->ctrls.auto_exp->val == V4L2_EXPOSURE_AUTO;
 	unsigned long rate;
 	int ret;
@@ -847,7 +849,7 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 		return ret;
 *//*	ret = ov8865_get_light_freq(sensor);
 	if (ret < 0)
-*/		return ret;
+		return ret;*/
 /*	ret = ov8865_set_bandingfilter(sensor);
 	if (ret < 0)
 		return ret;
@@ -888,7 +890,6 @@ static int ov8865_restore_mode(struct ov8865_dev *sensor)
 	sensor->last_mode = &ov8865_mode_init_data;
 
 	return ov8865_set_mode(sensor);
-	
 //	return ov8865_set_framefmt(sensor, &sensor->fmt);
 }
 
@@ -953,6 +954,7 @@ static int ov8865_set_power(struct ov8865_dev *sensor, bool on)
 {
 	int ret = 0;
 	printk("ov8865_set_power\n");
+
 	if (on){
 		ret = ov8865_set_power_on(sensor);
 		if (ret)
@@ -964,7 +966,6 @@ static int ov8865_set_power(struct ov8865_dev *sensor, bool on)
 	}else {
 		ov8865_set_power_off(sensor);
 	}
-
 	return 0;
 
 power_off:
@@ -989,12 +990,12 @@ static int ov8865_s_power(struct v4l2_subdev *sd, int on)
 	WARN_ON(sensor->power_count < 0);
 out:
 	mutex_unlock(&sensor->lock);
-
+/*
 	if (on && !ret && sensor->power_count == 1) {
-		/*initialize hardware*/
+		initialize hardware
 		ret = v4l2_ctrl_handler_setup(&sensor->ctrls.handler);
 	}
-
+*/
 	return ret;
 }
 
@@ -1271,7 +1272,8 @@ static int ov8865_s_stream(struct v4l2_subdev *sd, int enable)
 	int ret = 0;
 	printk("ov8865_s_stream\n");
 	mutex_lock(&sensor->lock);
-
+	printk("debug s_stream: %d\n",enable);
+	printk("debug s_stream: %d\n",sensor->streaming);
 	if (sensor->streaming == !enable) {
 		if (enable && sensor->pending_mode_change) {
 			ret = ov8865_set_mode(sensor);
@@ -1347,6 +1349,7 @@ static int ov8865_check_chip_id(struct ov8865_dev *sensor)
 	u8 chip_id_0, chip_id_1, chip_id_2;
 	u32 chip_id = 0x000000;
 	printk("ov8865_check_chip_id\n");
+	
 	ret = ov8865_set_power_on(sensor);
 	if (ret)
 		return ret;
@@ -1478,11 +1481,11 @@ static int ov8865_probe(struct i2c_client *client)
 		return ret;
 
 	mutex_init(&sensor->lock);
+/**/
 
 	ret = ov8865_check_chip_id(sensor);
 	if (ret)
 		goto entity_cleanup;
-	return 0;
 
 /*	ret = ov8865_init_controls(sensor);
 	if (ret)

@@ -4,7 +4,7 @@
  * All rights reserved.
  * Author: Yong Deng <yong.deng@magewell.com>
  */
-
+#define DEBUG
 #include <linux/of.h>
 
 #include <media/v4l2-device.h>

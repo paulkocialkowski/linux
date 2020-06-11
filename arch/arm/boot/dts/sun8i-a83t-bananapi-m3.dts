@@ -83,7 +83,7 @@
 			label = "bananapi-m3:green:usr";
 			gpios = <&axp_gpio 0 GPIO_ACTIVE_HIGH>;
 		};
-	};/**/
+	};/*
 reg_ov5640_avdd: ov5640-avdd {
 		compatible = "regulator-fixed";
 		regulator-name = "ov5640-avdd";
@@ -107,7 +107,7 @@ reg_ov5640_avdd: ov5640-avdd {
 		regulator-max-microvolt = <1500000>;
 		vin-supply = <&reg_dldo4>;
 	};
-/*
+*/
 
 	reg_ov8865_avdd: ov8865-avdd {
 		compatible = "regulator-fixed";
@@ -139,7 +139,7 @@ reg_ov5640_avdd: ov5640-avdd {
 		regulator-max-microvolt = <1200000>;
 		vin-supply = <&reg_eldo1>;
 	};
-*/
+/**/
 	reg_usb1_vbus: reg-usb1-vbus {
 		compatible = "regulator-fixed";
 		regulator-name = "usb1-vbus";
@@ -169,7 +169,7 @@ reg_ov5640_avdd: ov5640-avdd {
 &cpu100 {
 	cpu-supply = <&reg_dcdc3>;
 };
-/**/
+/*
 &ccu {
 	assigned-clocks = <&ccu CLK_CSI_MCLK>;
 	assigned-clock-parents = <&osc24M>;
@@ -191,7 +191,7 @@ reg_ov5640_avdd: ov5640-avdd {
 		vsync-active = <1>;   
 		pclk-sample = <1>; 
 	};
-};/*
+};*/
 
 &ccu {
 	assigned-clocks = <&ccu CLK_CSI_MCLK>;
@@ -201,7 +201,7 @@ reg_ov5640_avdd: ov5640-avdd {
 
 &csi {
 	pinctrl-names = "default";
-	pinctrl-0 = <&csi_8bit_parallel_pins>;
+	pinctrl-0 = <&csi2_pins>;
 	status = "okay";
 };
 
@@ -219,11 +219,11 @@ reg_ov5640_avdd: ov5640-avdd {
 		data-shift = <2>;
 	};
 };
-*/
+/**/
 &de {
 	status = "okay";
 };
-/**/
+/*
 &i2c2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_pe_pins>;
@@ -252,7 +252,7 @@ reg_ov5640_avdd: ov5640-avdd {
 			};
 		};
 	};
-};/*
+};*/
 
 &i2c2 {
 	pinctrl-names = "default";
@@ -287,7 +287,7 @@ reg_ov5640_avdd: ov5640-avdd {
 		};
 	};
 };
-*/
+/**/
 &ehci0 {
 	/* Terminus Tech FE 1.1s 4-port USB 2.0 hub here */
 	status = "okay";

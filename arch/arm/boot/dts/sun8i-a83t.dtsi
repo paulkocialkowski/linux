@@ -755,6 +755,14 @@
 				function = "lvds0";
 			};
 
+			/**/
+			csi2_pins: csi2-pins {
+				pins = "T21", "T20", "U19", "T19", "R21",
+				       "P20", "V19", "U20", "R20", "R19",
+				       "N13";
+				function = "csi2";
+			};
+
 			mmc0_pins: mmc0-pins {
 				pins = "PF0", "PF1", "PF2",
 				       "PF3", "PF4", "PF5";
@@ -1025,7 +1033,7 @@
 
 		csi: camera@1cb0000 {
 			compatible = "allwinner,sun8i-a83t-csi";
-			reg = <0x01cb0000 0x1000>;
+			reg = <0x01cb0000 0x2000>;
 			interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&ccu CLK_BUS_CSI>,
 				 <&ccu CLK_CSI_SCLK>,
