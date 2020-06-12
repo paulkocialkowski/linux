@@ -201,7 +201,7 @@ reg_ov5640_avdd: ov5640-avdd {
 
 &csi {
 	pinctrl-names = "default";
-	pinctrl-0 = <&csi2_pins>;
+	//pinctrl-0 = <&csi_8bit_parallel_pins>;
 	status = "okay";
 };
 
@@ -212,11 +212,11 @@ reg_ov5640_avdd: ov5640-avdd {
 		data-lanes = <1 2 3 4>;
 		bus-type = <4>;//<V4L2_FWNODE_BUS_TYPE_CSI2_DPHY>;
 		//V4L2_FWNODE_BUS_TYPE_CSI2_DPHY
-		hsync-active = <0>;
-		vsync-active = <0>;
-		pclk-sample = <1>;
-		bus-width = <8>;
-		data-shift = <2>;
+		//hsync-active = <0>;
+		//vsync-active = <0>;
+		//pclk-sample = <1>;
+	//	bus-width = <8>;
+	//	data-shift = <2>;
 	};
 };
 /**/
@@ -281,8 +281,8 @@ reg_ov5640_avdd: ov5640-avdd {
 				hsync-active = <0>;
 				vsync-active = <0>;
 				pclk-sample = <1>;
-				bus-width = <8>;
-				data-shift = <2>;
+	//			bus-width = <8>;
+	//			data-shift = <2>;
 			};
 		};
 	};

@@ -13,27 +13,18 @@
 
 void sun6i_reg_default(struct sun6i_csi_dev *sdev)
 {
-	int ret = 0;
-	printk("coucou dphy\n");
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x004, 0);
-	printk("coucou dphy 2\n");
-	ret = regmap_write(sdev->regmap, DPHY_OFFSET + 0x004, 0xb8c39bec);
-	if (ret){
-		printk("problème coucou dphy 2\n");
-	}
-	printk("coucou dphy 4\n");
+	regmap_write(sdev->regmap, DPHY_OFFSET + 0x004, 0xb8c39bec);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x008, 0);
-	printk("coucou dphy 5\n");
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x008, 0xb8d257f8);
-	printk("coucou dphy 6\n");
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0xb8df698e);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x018, 0);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x018, 0xb8c8a30c);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x01c, 0);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x01c, 0xb8df8ad7);
-	regmap_write(sdev->regmap, DPHY_OFFSET + 0x028, 0);
-	regmap_write(sdev->regmap, DPHY_OFFSET + 0x02c, 0);
+	/**/regmap_write(sdev->regmap, DPHY_OFFSET + 0x028, 0xffffffff);
+	/**/regmap_write(sdev->regmap, DPHY_OFFSET + 0x02c, 0xffffffff);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x030, 0);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x008, 0);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x104, 0);
@@ -45,21 +36,12 @@ void sun6i_reg_default(struct sun6i_csi_dev *sdev)
 
 void sun6i_dphy_init(struct sun6i_csi_dev *sdev)
 {
-	int ret = 0;
-	ret = regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000000);
-	if (ret < 0){
-		printk("problème écriture dphy 1\n");
-	}
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000000);
-	ret = regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000100);
-	if (ret<0)
-	{
-		printk("problème écriture dphy 2\n");
-	}
+	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000000);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000100);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000100);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000100);
-
+	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x00000100);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x80000100);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x80008100);
 	regmap_write(sdev->regmap, DPHY_OFFSET + 0x010, 0x80008000);
@@ -82,13 +64,13 @@ void sun6i_mipi_csi_dphy_init(struct sun6i_csi_dev *sdev)
 
 void sun6i_dphy_enable(struct sun6i_csi_dev *sdev)
 {
-	clk_set_rate(sdev->clk_dphy, DPHY_CLK);
+	/*clk_set_rate(sdev->clk_dphy, DPHY_CLK);
 	if (clk_prepare_enable(sdev->clk_dphy)) {
 		dev_err(sdev->dev, "Failed to enable DPHY clock");
-	}
+	}*/
 }
 
 void sun6i_dphy_disable(struct sun6i_csi_dev *sdev)
 {
-	clk_disable_unprepare(sdev->clk_dphy);
+	//clk_disable_unprepare(sdev->clk_dphy);
 }

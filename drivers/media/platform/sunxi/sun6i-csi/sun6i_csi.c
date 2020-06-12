@@ -214,10 +214,12 @@ clk_mod_disable:
 static enum csi_input_fmt get_csi_input_format(struct sun6i_csi_dev *sdev,
 					       u32 mbus_code, u32 pixformat)
 {
-	/* non-YUV */printk("get_csi_input_format\n");
+	printk("get_csi_input_format\n");
+	printk("mbus input: %d\n",mbus_code);
+	/* non-YUV */
 	if ((mbus_code & 0xF000) != 0x2000)
 		return CSI_INPUT_FORMAT_RAW;
-
+	printk("pixformat input: %d\n",pixformat);
 	switch (pixformat) {
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
@@ -242,7 +244,8 @@ static enum csi_output_fmt get_csi_output_format(struct sun6i_csi_dev *sdev,
 	    || field == V4L2_FIELD_INTERLACED_TB
 	    || field == V4L2_FIELD_INTERLACED_BT)
 		buf_interlaced = true;
-
+	printk("pixformat output: %d\n",pixformat);
+	printk("V4L2_PIX_FMT_SBGGR10: %d\n", V4L2_PIX_FMT_SBGGR10); 
 	switch (pixformat) {
 	case V4L2_PIX_FMT_SBGGR8:
 	case V4L2_PIX_FMT_SGBRG8:
@@ -629,13 +632,29 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 		     CSI_CH_INT_EN_FIFO1_OF_INT_EN |
 		     CSI_CH_INT_EN_FIFO0_OF_INT_EN |
 		     CSI_CH_INT_EN_FD_INT_EN |
-		     CSI_CH_INT_EN_CD_INT_EN);
+		     CSI_CH_INT_EN_CD_INT_EN |
+		     CSI_CH_INT_EN_VS_INT_EN |
+		     CSI_CH_INT_EN_MUL_ERR_INT_EN);
 
 	regmap_update_bits(regmap, CSI_CAP_REG, CSI_CAP_CH0_VCAP_ON,
 			   CSI_CAP_CH0_VCAP_ON);
 	if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
 		sun6i_mipi_csi_set_stream(csi, 1);
 	}
+	int addr_2;
+	int val;
+	for (addr_2 = 0; addr_2 < 157; addr_2=addr_2 + 4){
+		regmap_read(regmap, addr_2, &val);
+		printk("%x:%x\n",addr_2, val);
+	}
+	for (addr_2 = 12288; addr_2 <12312; addr_2=addr_2 + 4){
+		regmap_read(regmap, addr_2, &val);
+		printk("%x:%x\n",addr_2, val);
+	}
+	regmap_read(regmap, 0x3100, &val);
+	printk("0x3100:%x\n", val);
+	regmap_read(regmap, 0x3200, &val);
+	printk("0x3200:%x\n", val);
 }
 
 /* -----------------------------------------------------------------------------
@@ -813,7 +832,15 @@ static irqreturn_t sun6i_csi_isr(int irq, void *dev_id)
 	u32 status;
 	printk("sun6i_csi_isr\n");
 	regmap_read(regmap, CSI_CH_INT_STA_REG, &status);
-
+	u32 val;
+	regmap_read(regmap, 0x1020, &val);
+	printk("INT_STA0: %x",val);
+	regmap_read(regmap, 0x1024, &val);
+	printk("INT_STA1: %x",val);
+	regmap_read(regmap, 0x1028, &val);
+	printk("INT_MSK0: %x",val);
+	regmap_read(regmap, 0x102c, &val);
+	printk("INT_MSK1: %x",val);
 	if (!(status & 0xFF))
 		return IRQ_NONE;
 	printk("debug 1");
@@ -882,15 +909,18 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 		dev_err(&pdev->dev, "Unable to acquire dram-csi clock\n");
 		return PTR_ERR(sdev->clk_ram);
 	}
-	#define DPHY_CLK (150 * 1000 * 1000)
+	//#define DPHY_CLK (150 * 1000 * 1000)
 printk("ACTIVATION DE LA CLOCK DPHY\n");
 	sdev->clk_dphy = devm_clk_get(&pdev->dev, "dphy");
 	if (IS_ERR(sdev->clk_dphy)) {
 		sdev->clk_dphy = NULL;
 		dev_warn(&pdev->dev, "Unable to acquire dphy-csi clock. No MIPI-CSI2 support.\n");
 	}
-	clk_set_rate(sdev->clk_dphy, DPHY_CLK);
+	//clk_set_rate(sdev->clk_dphy, DPHY_CLK);
 	ret = clk_prepare_enable(sdev->clk_dphy);
+
+	sdev->clk_misc = devm_clk_get(&pdev->dev, "misc");
+	//ret = clk_prepare_enable(sdev->clk_misc);
 	sdev->rstc_bus = devm_reset_control_get_shared(&pdev->dev, NULL);
 	if (IS_ERR(sdev->rstc_bus)) {
 		dev_err(&pdev->dev, "Cannot get reset controller\n");

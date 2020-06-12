@@ -56,6 +56,7 @@ struct sun6i_csi_dev {
 	struct clk                      *clk_mod;
 	struct clk                      *clk_ram;
 	struct clk			*clk_dphy;
+	struct clk                      *clk_misc;
 	struct reset_control            *rstc_bus;
 
 	int                             planar_offset[3];

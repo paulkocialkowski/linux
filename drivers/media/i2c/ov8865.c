@@ -4,6 +4,8 @@
  * Copyright Kévin L'hôpital (C) 2020
  */
 
+//#include <linux/pm_runtime.h>
+
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
@@ -76,7 +78,7 @@ struct ov8865_pixfmt {
 };
 
 static const struct ov8865_pixfmt ov8865_formats[] = {
-	{ MEDIA_BUS_FMT_SRGGB10_1X10, V4L2_COLORSPACE_RAW,},
+	{ MEDIA_BUS_FMT_SBGGR10_1X10, V4L2_COLORSPACE_RAW,},
 };
 
 /* regulator supplies */
@@ -179,8 +181,12 @@ static inline struct ov8865_dev *to_ov8865_dev(struct v4l2_subdev *sd)
 static const struct reg_value ov8865_init_setting_QUXGA[] = {
 	{0x0103, 0x01, 16}, {0x0100, 0x00, 0}, {0x0100, 0x00, 0},
 	{0x0100, 0x00, 0}, {0x0100, 0x00, 0}, {0x3638, 0xff, 0},
-	{0x3638, 0xff, 0}, {0x3015, 0x01, 0}, {0x3022, 0x01, 0},
-	{0x3031, 0x0a, 0}, {0x3305, 0xf1, 0}, {0x3308, 0x00, 0},
+	{0x0302, 0x1e, 0}/**/,{0x0303, 0x00, 0}/**/, {0x0304, 0x03, 0},/**/
+	{0x030e, 0x00, 0}/**/,{0x030f, 0x09, 0},/**/ {0x0312, 0x01, 0},/**/
+	{0x031e, 0x0c, 0},/**/ {0x3015, 0x01, 0}, {0x3018, 0x72, 0},/**/
+	{0x3020, 0x93, 0},/**/ {0x3022, 0x01, 0},
+	{0x3031, 0x0a, 0}, {0x3106, 0x01, 0}/**/,{0x3305, 0xf1, 0}, 
+	{0x3308, 0x00, 0},
 	{0x3309, 0x28, 0}, {0x330a, 0x00, 0}, {0x330b, 0x20, 0},
 	{0x330c, 0x00, 0}, {0x330d, 0x00, 0}, {0x330e, 0x00, 0},
 	{0x330f, 0x40, 0}, {0x3307, 0x04, 0}, {0x3604, 0x04, 0},
@@ -229,6 +235,9 @@ static const struct reg_value ov8865_init_setting_QUXGA[] = {
 	{0x37b9, 0xff, 0}, {0x3800, 0x00, 0}, {0x3801, 0x0c, 0},
 	{0x3802, 0x00, 0}, {0x3803, 0x0c, 0}, {0x3804, 0x0c, 0},
     	{0x3805, 0xd3, 0}, {0x3806, 0x09, 0}, {0x3807, 0xa3, 0},
+	{0x3808, 0x06, 0},/**/ {0x3809, 0x60, 0},/**/ {0x380a, 0x04, 0},/**/
+	{0x380b, 0xc8, 0},/**/ {0x380c, 0x07, 0},/**/ {0x380d, 0x83, 0},/**/
+	{0x380e, 0x04, 0},/**/ {0x380f, 0xe0, 0},/**/
     	{0x3810, 0x00, 0}, {0x3811, 0x04, 0}, {0x3813, 0x04, 0},
     	{0x3814, 0x03, 0}, {0x3815, 0x01, 0}, {0x3820, 0x00, 0},
 	{0x3821, 0x67, 0}, {0x382a, 0x03, 0}, {0x382b, 0x01, 0},
@@ -586,6 +595,7 @@ static int ov8865_set_timings(struct ov8865_dev *sensor,
 		return ret;
 
 	return ov8865_write_reg16(sensor, OV8865_REG_VTS, mode->vtot);
+	return 0;
 }
 
 static int ov8865_load_regs(struct ov8865_dev *sensor,
@@ -599,7 +609,7 @@ static int ov8865_load_regs(struct ov8865_dev *sensor,
 	int ret = 0;
 	printk("ov8865_load_regs\n");
 
-	for (i=0; i < mode->reg_data_size; i++, regs++) {//++i,++regs
+	for (i=0; i < mode->reg_data_size; ++i, ++regs) {//++i,++regs
 		delay_ms = regs->delay_ms;
 		reg_addr = regs->reg_addr;
 		val = regs->val;
@@ -637,16 +647,16 @@ ov8865_find_mode(struct ov8865_dev *sensor, enum ov8865_frame_rate fr,
 	return mode;
 }
 
-/*static ov8865_calc_pixel_rate(struct ov8865_dev *sensor)
+static u64 ov8865_calc_pixel_rate(struct ov8865_dev *sensor)
 {
 	u64 rate;
 
-	rate = sensor->current_mode->vtot * sensor->current_mode_>htot;
+	rate = sensor->current_mode->vtot * sensor->current_mode->htot;
 	rate *= ov8865_framerates[sensor->current_fr];
 
 	return rate;
 }
-*/
+
 /*
 static int ov8865_set_mode_exposure_calc(struct ov8865_dev * sensor,
 					 const struct ov8865_mode_info *mode)
@@ -739,7 +749,7 @@ static int ov8865_set_pclk(struct ov8865_dev *sensor)
 {
 	int ret;
 	printk("ov8865_set_pclk\n");
-	ret = ov8865_write_reg(sensor, OV8865_REG_PLL_CTRL2, PLL1_MULTIPLIER);
+	/*ret = ov8865_write_reg(sensor, OV8865_REG_PLL_CTRL2, PLL1_MULTIPLIER);
 	if (ret)
 		return ret;
 
@@ -750,11 +760,15 @@ static int ov8865_set_pclk(struct ov8865_dev *sensor)
 	ret = ov8865_write_reg(sensor, OV8865_REG_PLL_CTRL4, PLL1_MIPI_DIVIDER);
 	if (ret)
 		return ret;
+	ret = ov8865_write_reg(sensor, 0x0312, 0x01);
+	if (ret)
+		return ret;
 
 	ret = ov8865_write_reg(sensor, OV8865_REG_PLL_CTRL1E, 0x0c);
 	if (ret)
 		return ret;
-	return ov8865_write_reg(sensor, OV8865_REG_CLOCK_SEL, 0x93);
+	return ov8865_write_reg(sensor, OV8865_REG_CLOCK_SEL, 0x93);*/
+	return 0;
 }
 
 static int ov8865_set_sclk(struct ov8865_dev *sensor)
@@ -779,17 +793,29 @@ static int ov8865_set_sclk(struct ov8865_dev *sensor)
 
 	return ov8865_write_reg(sensor, OV8865_REG_SRB_HOST_INPUT,
 				SCLK_DIVIDER);
+	return 0;
+}
+
+static int ov8865_set_virtual_channel(struct ov8865_dev *sensor, int channel)
+{
+	u8 channel_id;
+	int ret;
+
+	ret = ov8865_read_reg(sensor, 0x4813, &channel_id);
+	if (ret < 0)
+		return ret;
+	return ov8865_write_reg(sensor, 0x4813, channel_id | channel);
 }
 /*
 static int ov8865_set_autoexposure(struct ov8865_dev *sensor, bool on)
 {
 	return ov8865_mod_reg(sensor, OV8865_REG_AEC_PK_MANUAL,
 */
-static int ov8865_set_autogain(struct ov8865_dev *sensor, bool on)
+/*static int ov8865_set_autogain(struct ov8865_dev *sensor, bool on)
 {
 	return ov8865_mod_reg(sensor, OV8865_REG_AEC_PK_MANUAL,
 			      BIT(2), on ? 0 : BIT(2));
-}
+}*/
 
 static int ov8865_set_mode(struct ov8865_dev *sensor)
 {
@@ -804,12 +830,12 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	//dn_mode = mode->dn_mode;
 	//orig_dn_mode = orig_mode->dn_mode;
 
-	if (auto_gain) {
+/*	if (auto_gain) {
 		ret = ov8865_set_autogain(sensor, false);
 		if (ret)
 			return ret;
 	}
-
+*/
 /*	if (auto_exp) {
 		ret = ov8865_set_autoexposure(sensor, false);
 		if (ret)
@@ -817,8 +843,8 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	}*/
 /*check*/
 	/*
-	 * All the formats we support have 10 bits per pixel, seems to require
-	 * the same rate than Raw RGB Bayer, so we can just use 10 bpp all the
+	 * All the formats we support have 1 bits per pixel, seems to require
+	 * the same rate than Raw RGB Bayer, so we can just use 1 bpp all the
 	 * time.
 	 */
 	//rate = ov8865_calc_pixel_rate(sensor) * 10;
@@ -836,8 +862,8 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	if (ret < 0)
 		goto restore_auto_exp_gain;
 
-	if (auto_gain)
-		ov8865_set_autogain(sensor, true);
+/*	if (auto_gain)
+		ov8865_set_autogain(sensor, true);*/
 /*	if (auto_exp)
 		ov8865_set_autoexposure(sensor, true);
 */
@@ -853,10 +879,10 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 /*	ret = ov8865_set_bandingfilter(sensor);
 	if (ret < 0)
 		return ret;
-*//*	ret = ov8865_set_virtual_channel(sensor);
+*/	ret = ov8865_set_virtual_channel(sensor,0);
 	if (ret < 0)
 		return ret;
-*/
+
 	sensor->pending_mode_change = false;
 	sensor->last_mode = mode;
 
@@ -865,9 +891,9 @@ restore_auto_exp_gain:
 /*	if (auto_exp)
 		ov8865_set_autoexposure(sensor, true);*/
 restore_auto_gain:
-	if (auto_gain)
+	/*if (auto_gain)
 		ov8865_set_autogain(sensor, true);
-
+*/
 	return ret;
 }
 
@@ -1131,9 +1157,9 @@ static int ov8865_set_fmt(struct v4l2_subdev *sd,
 	if (mbus_fmt->code != sensor->fmt.code)
 		sensor->pending_fmt_change = true;
 
-	/*__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
+	__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
 				 ov8865_calc_pixel_rate(sensor));
-*/
+
 out:
 	mutex_unlock(&sensor->lock);
 	return ret;
@@ -1244,9 +1270,9 @@ static int ov8865_s_frame_interval(struct v4l2_subdev *sd,
 		sensor->current_mode = mode;
 		sensor->pending_mode_change = true;
 
-/*		__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
+		__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
 					 ov8865_calc_pixel_rate(sensor));
-*/	}
+	}
 out:
 	mutex_unlock(&sensor->lock);
 	return ret;
@@ -1269,6 +1295,7 @@ static int ov8865_enum_mbus_code(struct v4l2_subdev *sd,
 static int ov8865_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct ov8865_dev *sensor = to_ov8865_dev(sd);
+	//struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret = 0;
 	printk("ov8865_s_stream\n");
 	mutex_lock(&sensor->lock);
@@ -1280,7 +1307,7 @@ static int ov8865_s_stream(struct v4l2_subdev *sd, int enable)
 			if (ret)
 				goto out;
 		}
-
+		//pm_runtime_get_sync(&client->dev);
 		/*if (enable && sensor->pending_fmt_change) {
 			ret = ov8865_set_framefmt(sensor, &sensor->fmt);
 			if (ret)
@@ -1298,8 +1325,52 @@ static int ov8865_s_stream(struct v4l2_subdev *sd, int enable)
 		if(!ret)
 			sensor->streaming = enable;
 	}
+	u8 val;
+	int addr = 23445;
+	int i=0;
+	ov8865_read_reg(sensor, 0x0100, &val);
+	printk("streaming: %x\n", val);
+	ov8865_read_reg(sensor, OV8865_REG_MIPI_CTRL, &val);
+	printk("MIPI_CTRL: %x\n", val);
+	/*if (affichage){
+		affichage = false;
+		while (addr !=23738){
+		ov8865_read_reg(sensor, addr, &val);
+		printk("%x:%x",addr, val);
+		addr = addr + 1;
+		}
+	}*/
+	ov8865_read_reg(sensor, 0x030f, &val);
+	printk("0x030f:%x", val);
+	ov8865_read_reg(sensor, 0x3501, &val);
+	printk("0x3501:%x", val);
+	ov8865_read_reg(sensor, 0x3502, &val);
+	printk("0x3502:%x", val);
+	for(addr = 14344 ;addr< 14352 ;addr++){
+		ov8865_read_reg(sensor, addr, &val);
+		printk("%x:%x",addr, val);
+	}
+	for(addr = 23049 ;addr< 23053 ;addr++){
+                 ov8865_read_reg(sensor, addr, &val);
+                 printk("%x:%x\n", addr, val);
+	}
+	for(addr = 23312 ;addr< 23316 ;addr++){
+		ov8865_read_reg(sensor, addr, &val);
+		printk("%x:%x\n", addr, val);
+	}
+	for(addr = 24076 ;addr< 24079 ;addr++){
+		ov8865_read_reg(sensor, addr, &val);
+		printk("%x:%x\n", addr, val);
+	}
+	for(addr = 24082 ;addr< 24107 ;addr++){
+		ov8865_read_reg(sensor, addr, &val);
+		printk("%x:%x\n", addr, val);
+	}
+	//23735 
+
 out:
 	mutex_unlock(&sensor->lock);
+	msleep(10);
 	return ret;
 }
 
@@ -1369,7 +1440,7 @@ static int ov8865_check_chip_id(struct ov8865_dev *sensor)
 		dev_err(&client->dev, "%s: wrong chip identifier, expected 0x8865, got 0x%x\n",__func__, chip_id);
 		ret = -ENXIO;
 	}
-
+	return 0;
 power_off:
 	ov8865_set_power_off(sensor);
 	return ret;
@@ -1384,30 +1455,28 @@ static int ov8865_probe(struct i2c_client *client)
 	u32 rotation;
 	int ret = 0;
 	pr_info("ov8865: probe");
-
 	sensor = devm_kzalloc(dev, sizeof(*sensor), GFP_KERNEL);
 	if (!sensor)
 		return -ENOMEM;
 
 	sensor->i2c_client = client;
-
 	/*
 	 * default init sequence initialize sensor to
 	 * RAW SBGGR10 QUXGA@30fps
 	 */
 	fmt = &sensor->fmt;
-	fmt->code = MEDIA_BUS_FMT_SRGGB10_1X10;
+	fmt->code = MEDIA_BUS_FMT_SBGGR10_1X10;
 	fmt->colorspace = V4L2_COLORSPACE_RAW;
 	fmt->ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(fmt->colorspace);
 	fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
 	fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(fmt->colorspace);
 	fmt->width = 3264;
-	fmt->height = 2448;
+	fmt->height = 2448;//1836;
 	fmt->field = V4L2_FIELD_NONE;
 	sensor->frame_interval.numerator = 1;
 	sensor->frame_interval.denominator = ov8865_framerates[OV8865_30_FPS];
 	sensor->current_fr = OV8865_30_FPS;
-	sensor->current_mode = &ov8865_mode_data[OV8865_MODE_QUXGA_3264_2448];
+	sensor->current_mode = &ov8865_mode_data[OV8865_MODE_6M_3264_1836];//OV8865_MODE_QUXGA_3264_2448];
 	sensor->last_mode = sensor->current_mode;
 	//sensor->ae_target = 52;
 
@@ -1491,10 +1560,17 @@ static int ov8865_probe(struct i2c_client *client)
 	if (ret)
 		goto entity_cleanup;
 */
-	ret = v4l2_async_register_subdev_sensor_common(&sensor->sd);
+	ret = v4l2_async_register_subdev(&sensor->sd);//_sensor_common(&sensor->sd);
 	if (ret)
 		goto free_ctrls;
 
+	/*ret = pm_runtime_set_active(&client->dev);
+	if (ret)
+		printk("problème runtime active\n");
+	pm_runtime_enable(&client->dev);
+
+	pm_runtime_idle(&client->dev);
+*/
 	return 0;
 free_ctrls:
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);

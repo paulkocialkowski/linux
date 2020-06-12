@@ -19,7 +19,6 @@
 
 #define MIPI_OFFSET     0x1000
 #define IS_FLAG(x, y) (((x) & (y)) == y) 
-#define DPHY_CLK (150 * 1000 * 1000)
 /*struct sun6i_mipi_csi_dev {
 	struct sun6i_mipi_csi		mipi_csi;
 	struct device			*dev;
@@ -109,28 +108,23 @@ void sun6i_mipi_csi_set_stream(struct sun6i_csi *csi, bool enable)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
 	u32 val;
-	int ret = 0;
-
-	printk("sun6i_mipi_csi_set_stream\n");
+/*	int ret;
+	ret = clk_prepare_enable(sdev->clk_misc);
+	if(ret)
+		printk("problème activation misk\n");
+*/	printk("sun6i_mipi_csi_set_stream\n");
 	if (enable) {
-		ret = regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
-		if (ret < 0){
-			printk("problème lecture\n");
-		}
-		ret = regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val|0x80000000);
-		if (ret < 0){
-			printk("problème écriture\n");
-		}
-		printk("debug set_stream 1");
+		regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
+		regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val|0x80000000);
 		mdelay(10);//usleep_range(10000, 12000);
-		printk("debug set_stream 2");
 		sun6i_dphy_enable(sdev);
-		printk("debug set_stream 3");
 	} else {
 		sun6i_dphy_disable(sdev);
 		regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
 		regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val&0x7fffffff);
 	}
+	regmap_read(sdev->regmap, MIPI_OFFSET + 0x14, &val);
+	printk("0x14: %x\n",val);
 }
 /**/
 
@@ -144,7 +138,7 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 	int total_rx_ch;
 	u32 val;
 	int ch;
-	int ret =0;
+
 	printk("sun6i_mipi_csi_setup_bus: %d lignes\n",lane_num);
 	total_rx_ch = 0;
 	/*clk_set_rate(sdev->clk_dphy, DPHY_CLK);
@@ -152,6 +146,11 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
          if (ret) {
                  printk("Enable csi clk err %d\n", ret);
          }*/
+	int ret;
+	ret = clk_prepare_enable(sdev->clk_misc);
+        if(ret)
+                printk("problème activation misk\n");
+	sun6i_mipi_csi_dphy_init(sdev);
 
 	if (IS_FLAG(flags, V4L2_MBUS_CSI2_CHANNEL_0))
 		total_rx_ch++;
@@ -171,33 +170,24 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 		total_rx_ch++;
 	}
 	/*set lane*/
-	printk("coucou mipi\n");
-	regmap_read(sdev->regmap,/* MIPI_OFFSET*/ + 0x100, &val);
-	printk("coucou mipi 2\n");
-	ret = regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val|((lane_num -1) <<
+	printk("lane_num = %d\n",lane_num);
+	regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
+	regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val|((lane_num -1) <<
 							      4));
-	if (ret)
-		printk("problème lecture coucou 3\n");
-	printk("coucou mipi 3\n");
 	/*set total channels*/
-	ret = regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
-	if (ret)
-		printk("problème lecture coucou 4\n");
-	printk("coucou mipi 4\n");
+	regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
 	regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val|((total_rx_ch - 1)
 							      << 16));
 	printk("tot_ch = %d\n", total_rx_ch);
-	printk("coucou mipi 5\n");
-	printk("tot_ch = %d\n", total_rx_ch);
-	for (ch = 0; ch < total_rx_ch; ch++) {
-		printk("coucou mipi 9\n");
+	printk("get_pky_fmt = %d\n",get_pkt_fmt(csi->config.code)); 
+	for (ch = 0; ch < total_rx_ch; ch++) { /*attention ch ne focntionne pas
+						 SI DIFFÉRENT DE virtual
+						 channel*/
 		switch(ch)
 		{
 			case 0:
-				printk("coucou mipi 7\n");
 				regmap_read(sdev->regmap, MIPI_OFFSET + 0x104,
 					    &val);
-				printk("coucou mipi 8\n");
 				regmap_write(sdev->regmap, MIPI_OFFSET + 0x104,
 					     val|(ch << 6));
 				regmap_read(sdev->regmap, MIPI_OFFSET + 0x104,
@@ -214,7 +204,7 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 					    &val);
 				regmap_write(sdev->regmap, MIPI_OFFSET + 0x104,
 					     val|get_pkt_fmt(csi->config.code
-							      << 8));
+							    )<< 8);
 				break;
 			case 2:
 				regmap_read(sdev->regmap, MIPI_OFFSET + 0x104,
@@ -225,7 +215,7 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 					    &val);
 				regmap_write(sdev->regmap, MIPI_OFFSET + 0x104,
 					     val|get_pkt_fmt(csi->config.code
-							     << 16));
+							    )<< 16);
 				break;
 			case 3:
 				regmap_read(sdev->regmap, MIPI_OFFSET + 0x104,
@@ -236,7 +226,7 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 					    &val);
 				regmap_write(sdev->regmap, MIPI_OFFSET + 0x104,
 					     val|get_pkt_fmt(csi->config.code
-							      <<24));
+							    )<<24);
 				break;
 			default:
 				regmap_read(sdev->regmap, MIPI_OFFSET + 0x104,
@@ -246,13 +236,17 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 				break;
 			}
 	}
-printk("coucou mipi 6\n");
 	/*dphy_param.lane_num = lane_num;
 	dphy_param.bps = 400 * 1000 * 1000;
 	dphy_param.auto_bps = 1;
 	sun6i_dphy_set_param(sdev, &dphy_param);
 */
-	sun6i_mipi_csi_dphy_init(sdev);
+//	sun6i_mipi_csi_dphy_init(sdev);
+	mdelay(1);
+	clk_disable_unprepare(sdev->clk_dphy);
+	clk_prepare_enable(sdev->clk_dphy);
+	mdelay(10);
+
 }
 
 
