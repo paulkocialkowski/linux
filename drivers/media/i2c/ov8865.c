@@ -635,6 +635,8 @@ ov8865_find_mode(struct ov8865_dev *sensor, enum ov8865_frame_rate fr,
 				      ARRAY_SIZE(ov8865_mode_data),
 				      hact, vact, width, height);
 
+	printk("ov8865_find_mode gives %#x\n", mode);
+
 	if (!mode || (!nearest && (mode->hact != width || mode->vact !=
 				   height)))
 		return NULL;
@@ -804,6 +806,7 @@ static int ov8865_set_virtual_channel(struct ov8865_dev *sensor, int channel)
 	ret = ov8865_read_reg(sensor, 0x4813, &channel_id);
 	if (ret < 0)
 		return ret;
+	printk(KERN_ERR "%s: channel id: %#x\n", __func__, channel_id);
 	return ov8865_write_reg(sensor, 0x4813, channel_id | channel);
 }
 /*
@@ -826,7 +829,7 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	//bool auto_exp =  sensor->ctrls.auto_exp->val == V4L2_EXPOSURE_AUTO;
 	unsigned long rate;
 	int ret;
-	printk("ov8865_set_mode\n");
+	printk("ov8865_set_mode with %ux%u\n", mode->hact, mode->vact);
 	//dn_mode = mode->dn_mode;
 	//orig_dn_mode = orig_mode->dn_mode;
 
@@ -883,6 +886,7 @@ static int ov8865_set_mode(struct ov8865_dev *sensor)
 	if (ret < 0)
 		return ret;
 
+	printk(KERN_ERR "\n == pending_mode_change clear ==\n");
 	sensor->pending_mode_change = false;
 	sensor->last_mode = mode;
 
@@ -914,6 +918,8 @@ static int ov8865_restore_mode(struct ov8865_dev *sensor)
 	if (ret)
 		return ret;
 	sensor->last_mode = &ov8865_mode_init_data;
+
+	msleep(20);
 
 	return ov8865_set_mode(sensor);
 //	return ov8865_set_framefmt(sensor, &sensor->fmt);
@@ -1113,9 +1119,12 @@ static int ov8865_get_fmt(struct v4l2_subdev *sd,
 						 format->pad);
 	else
 		fmt = &sensor->fmt;
-	format->format = *fmt;
-		mutex_unlock(&sensor->lock);
-	return 0;
+
+	if (fmt)
+		format->format = *fmt;
+	mutex_unlock(&sensor->lock);
+
+	return fmt ? 0 : -EINVAL;
 }
 
 static int ov8865_set_fmt(struct v4l2_subdev *sd,
@@ -1148,18 +1157,28 @@ static int ov8865_set_fmt(struct v4l2_subdev *sd,
 	else
 		fmt = &sensor->fmt;
 
-	*fmt = *mbus_fmt;
+	printk("ov8865_set_fmt: got fmt to change %#x\n", fmt);
+
+	if (fmt)
+		*fmt = *mbus_fmt;
+	else
+		ret = -EINVAL;
 
 	if (new_mode != sensor->current_mode) {
 		sensor->current_mode = new_mode;
 		sensor->pending_mode_change = true;
+	printk(KERN_ERR "\n == pending_mode_change set ==\n");
 	}
-	if (mbus_fmt->code != sensor->fmt.code)
+	if (mbus_fmt->code != sensor->fmt.code) {
 		sensor->pending_fmt_change = true;
+	printk(KERN_ERR "\n == pending_mode_change set ==\n");
+	}
+	printk("ov8865_set_fmt: go calc pixel rate\n");
 
+/*
 	__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
 				 ov8865_calc_pixel_rate(sensor));
-
+*/
 out:
 	mutex_unlock(&sensor->lock);
 	return ret;
@@ -1269,9 +1288,12 @@ static int ov8865_s_frame_interval(struct v4l2_subdev *sd,
 		sensor->frame_interval = fi->interval;
 		sensor->current_mode = mode;
 		sensor->pending_mode_change = true;
+	printk(KERN_ERR "\n == pending_mode_change set ==\n");
 
+/*
 		__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
 					 ov8865_calc_pixel_rate(sensor));
+*/
 	}
 out:
 	mutex_unlock(&sensor->lock);
@@ -1301,8 +1323,10 @@ static int ov8865_s_stream(struct v4l2_subdev *sd, int enable)
 	mutex_lock(&sensor->lock);
 	printk("debug s_stream: %d\n",enable);
 	printk("debug s_stream: %d\n",sensor->streaming);
-	if (sensor->streaming == !enable) {
-		if (enable && sensor->pending_mode_change) {
+	if (sensor->streaming != enable) {
+//		if (enable && sensor->pending_mode_change) {
+		if (enable) {
+			printk(KERN_ERR "%s: go set new mode for sensor\n", __func__);
 			ret = ov8865_set_mode(sensor);
 			if (ret)
 				goto out;
@@ -1452,6 +1476,7 @@ static int ov8865_probe(struct i2c_client *client)
 	struct fwnode_handle *endpoint;
 	struct ov8865_dev *sensor;
 	struct v4l2_mbus_framefmt *fmt;
+	const struct ov8865_mode_info *default_mode;
 	u32 rotation;
 	int ret = 0;
 	pr_info("ov8865: probe");
@@ -1462,22 +1487,24 @@ static int ov8865_probe(struct i2c_client *client)
 	sensor->i2c_client = client;
 	/*
 	 * default init sequence initialize sensor to
-	 * RAW SBGGR10 QUXGA@30fps
+	 * RAW SBGGR10 3264x1836@30fps
 	 */
+	default_mode = &ov8865_mode_data[OV8865_MODE_6M_3264_1836];
+
 	fmt = &sensor->fmt;
 	fmt->code = MEDIA_BUS_FMT_SBGGR10_1X10;
 	fmt->colorspace = V4L2_COLORSPACE_RAW;
 	fmt->ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(fmt->colorspace);
 	fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
 	fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(fmt->colorspace);
-	fmt->width = 3264;
-	fmt->height = 2448;//1836;
+	fmt->width = default_mode->hact;
+	fmt->height = default_mode->vact;
 	fmt->field = V4L2_FIELD_NONE;
 	sensor->frame_interval.numerator = 1;
 	sensor->frame_interval.denominator = ov8865_framerates[OV8865_30_FPS];
 	sensor->current_fr = OV8865_30_FPS;
-	sensor->current_mode = &ov8865_mode_data[OV8865_MODE_6M_3264_1836];//OV8865_MODE_QUXGA_3264_2448];
-	sensor->last_mode = sensor->current_mode;
+	sensor->current_mode = default_mode;
+	sensor->last_mode = default_mode;
 	//sensor->ae_target = 52;
 
 	/* optional indication of physical rotation of sensor */
@@ -1573,6 +1600,7 @@ static int ov8865_probe(struct i2c_client *client)
 */
 	return 0;
 free_ctrls:
+	/* XXX */
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);
 entity_cleanup:
 	mutex_destroy(&sensor->lock);
@@ -1589,6 +1617,7 @@ static int ov8865_remove(struct i2c_client *client)
 	v4l2_async_unregister_subdev(&sensor->sd);
 	mutex_destroy(&sensor->lock);
 	media_entity_cleanup(&sensor->sd.entity);
+	/* XXX */
 	v4l2_ctrl_handler_free(&sensor->ctrls.handler);
 
 	return 0;
