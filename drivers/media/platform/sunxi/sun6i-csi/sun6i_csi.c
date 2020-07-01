@@ -615,7 +615,7 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
 	struct regmap *regmap = sdev->regmap;
-	printk("sun6i_csi_set_stream\n");
+	printk("sun6i_csi_set_stream(%d)\n", enable);
 	if (!enable) {
 		if (csi->v4l2_ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
 			sun6i_mipi_csi_set_stream(csi, 0);
@@ -643,6 +643,7 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 	}
 	int addr_2;
 	int val;
+/*
 	for (addr_2 = 0; addr_2 < 157; addr_2=addr_2 + 4){
 		regmap_read(regmap, addr_2, &val);
 		printk("%x:%x\n",addr_2, val);
@@ -655,6 +656,7 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 	printk("0x3100:%x\n", val);
 	regmap_read(regmap, 0x3200, &val);
 	printk("0x3200:%x\n", val);
+*/
 }
 
 /* -----------------------------------------------------------------------------

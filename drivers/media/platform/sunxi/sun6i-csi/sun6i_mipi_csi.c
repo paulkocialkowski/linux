@@ -103,6 +103,44 @@ static enum pkt_fmt get_pkt_fmt(u16 bus_pix_code)
 	}
 }
 
+struct {
+	u32 offset;
+	char *name;
+} regs[] = {
+	{ 0x0000, "MIPI_CSI2_VERSION" },
+	{ 0x0004, "MIPI_CSI2_CTRL" },
+	{ 0x0008, "MIPI_CSI2_RX_PKT_NUM" },
+	{ 0x000c, "RSVD0" },
+	{ 0x0010, "DPHY_CTRL" },
+	{ 0x0014, "DPHY_STATUS" },
+	{ 0x0018, "RSVD1" },
+	{ 0x001c, "RSVD2" },
+	{ 0x0020, "INT_STA0" },
+	{ 0x0024, "INT_STA1" },
+	{ 0x0028, "INT_MSK0" },
+	{ 0x002c, "INT_MSK1" },
+	{ 0x0030, "DPHY_ANA0" },
+	{ 0x0100, "MIPI_CSI2_CFG" },
+	{ 0x0104, "MIPI_CSI2_VCDT0" },
+	{ 0x0108, "MIPI_CSI2_VCDT1" },
+	{ 0, NULL },
+};
+
+void regs_dump(struct sun6i_csi *csi, char *step)
+{
+	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
+	unsigned int i;
+
+	printk(KERN_ERR "\n== MIPI CSI2 REGS DUMP (%s) ==\n", step);
+
+	for (i = 0; regs[i].name; i++) {
+		u32 value = 0;
+		regmap_read(sdev->regmap, MIPI_OFFSET + regs[i].offset, &value);
+
+		printk(KERN_ERR "%s (%#04x): %#08x\n", regs[i].name, regs[i].offset, value);
+	}
+}
+
 /**/
 void sun6i_mipi_csi_set_stream(struct sun6i_csi *csi, bool enable)
 {
@@ -112,7 +150,10 @@ void sun6i_mipi_csi_set_stream(struct sun6i_csi *csi, bool enable)
 	ret = clk_prepare_enable(sdev->clk_misc);
 	if(ret)
 		printk("problème activation misk\n");
-*/	printk("sun6i_mipi_csi_set_stream\n");
+*/	printk("sun6i_mipi_csi_set_stream(%d)\n", enable);
+
+	regs_dump(csi, "before enable");
+
 	if (enable) {
 		regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
 		regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val|0x80000000);
@@ -123,8 +164,8 @@ void sun6i_mipi_csi_set_stream(struct sun6i_csi *csi, bool enable)
 		regmap_read(sdev->regmap, MIPI_OFFSET + 0x100, &val);
 		regmap_write(sdev->regmap, MIPI_OFFSET + 0x100, val&0x7fffffff);
 	}
-	regmap_read(sdev->regmap, MIPI_OFFSET + 0x14, &val);
-	printk("0x14: %x\n",val);
+
+	regs_dump(csi, "after enable");
 }
 /**/
 
@@ -147,10 +188,17 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
                  printk("Enable csi clk err %d\n", ret);
          }*/
 	int ret;
+
+	// XXX needed to acces registers, maybe should be done earlier
 	ret = clk_prepare_enable(sdev->clk_misc);
         if(ret)
                 printk("problème activation misk\n");
+
+	regs_dump(csi, "before dphy init");
+
 	sun6i_mipi_csi_dphy_init(sdev);
+
+	regs_dump(csi, "after dphy init");
 
 	if (IS_FLAG(flags, V4L2_MBUS_CSI2_CHANNEL_0))
 		total_rx_ch++;
@@ -242,11 +290,16 @@ void sun6i_mipi_csi_setup_bus(struct sun6i_csi *csi)
 	sun6i_dphy_set_param(sdev, &dphy_param);
 */
 //	sun6i_mipi_csi_dphy_init(sdev);
+
+
+	regs_dump(csi, "after setup bus before dphy");
+
 	mdelay(1);
 	clk_disable_unprepare(sdev->clk_dphy);
 	clk_prepare_enable(sdev->clk_dphy);
 	mdelay(10);
 
+	regs_dump(csi, "after setup bus after dphy");
 }
 
 
