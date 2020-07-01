@@ -827,6 +827,12 @@ clean_media:
 /* -----------------------------------------------------------------------------
  * Resources and IRQ
  */
+static irqreturn_t sun6i_mipi_csi_isr(int irq, void *dev_id)
+{
+	printk(KERN_ERR "%s()\n", __func__);
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t sun6i_csi_isr(int irq, void *dev_id)
 {
 	struct sun6i_csi_dev *sdev = (struct sun6i_csi_dev *)dev_id;
@@ -929,6 +935,7 @@ printk("ACTIVATION DE LA CLOCK DPHY\n");
 		return PTR_ERR(sdev->rstc_bus);
 	}
 
+	printk(KERN_ERR "go request irq\n");
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return -ENXIO;
@@ -940,6 +947,17 @@ printk("ACTIVATION DE LA CLOCK DPHY\n");
 		return ret;
 	}
 
+	printk(KERN_ERR "go request mipi irq\n");
+	irq = platform_get_irq(pdev, 1);
+	if (irq < 0)
+		return -ENXIO;
+
+	ret = devm_request_irq(&pdev->dev, irq, sun6i_mipi_csi_isr, 0, MODULE_NAME,
+			       sdev);
+	if (ret) {
+		dev_err(&pdev->dev, "Cannot request csi IRQ\n");
+		return ret;
+	}
 	return 0;
 }
 
