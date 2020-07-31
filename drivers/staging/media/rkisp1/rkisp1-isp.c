@@ -914,7 +914,8 @@ static int rkisp1_mipi_csi2_start(struct rkisp1_isp *isp,
 
 	phy_mipi_dphy_get_default_config(pixel_clock, isp->sink_fmt->bus_width,
 					 sensor->lanes, cfg);
-	phy_set_mode(sensor->dphy, PHY_MODE_MIPI_DPHY);
+	phy_set_mode_ext(cdev->dphy, PHY_MODE_MIPI_DPHY,
+			 PHY_MIPI_DPHY_SUBMODE_RX);
 	phy_configure(sensor->dphy, &opts);
 	phy_power_on(sensor->dphy);
 
