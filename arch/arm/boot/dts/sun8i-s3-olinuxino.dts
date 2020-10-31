@@ -1,0 +1,264 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR X11)
+/*
+ * Copyright 2020 Paul Kocialkowski <contact@paulk.fr>
+ */
+
+/dts-v1/;
+#include "sun8i-v3.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "S3-OLinuXino";
+	/* FIXME with agreed lines */
+	compatible = "olimex,s3-olinuxino", "allwinner,sun8i-s3",
+		     "allwinner,sun8i-v3";
+
+	aliases {
+		serial0 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led-red {
+			label = "s3-olinuxino:led:red";
+			gpios = <&pio 1 5 GPIO_ACTIVE_HIGH>; /* PB5 */
+		};
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		csi0_memory: pool {
+			compatible = "shared-dma-pool";
+			size = <0x4000000>;
+			no-align;
+			no-map;
+		};
+	};
+
+	imx219_supply_parent: imx219-supply-parent {
+		compatible = "regulator-fixed";
+		regulator-name = "imx219-supply-parent";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&reg_dcdc3>;
+		gpio = <&pio 4 24 GPIO_ACTIVE_HIGH>; /* PE24 */
+		enable-active-high;
+	};
+
+	imx219_supply_vdig: imx219-supply-vdig {
+		compatible = "regulator-fixed";
+		regulator-name = "imx219-supply-vdig";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&imx219_supply_parent>;
+	};
+
+	imx219_supply_vana: imx219-supply-vana {
+		compatible = "regulator-fixed";
+		regulator-name = "imx219-supply-vana";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		vin-supply = <&imx219_supply_parent>;
+	};
+
+	imx219_supply_vddl: imx219-supply-vddl {
+		compatible = "regulator-fixed";
+		regulator-name = "imx219-supply-vddl";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		vin-supply = <&imx219_supply_parent>;
+	};
+
+	imx219_clock: clock {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+};
+
+&csi0 {
+	memory-region = <&csi0_memory>;
+	status = "okay";
+};
+
+&csi1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&csi1_8bit_pins>;
+	status = "okay";
+};
+
+&csi1_in_parallel {
+	csi1_in_ov2640: endpoint {
+		remote-endpoint = <&ov2640_out_csi1>;
+		bus-width = <8>;
+		hsync-active = <1>; /* Active high */
+		vsync-active = <0>; /* Active low */
+		data-active = <1>;  /* Active high */
+		pclk-sample = <1>;  /* Rising */
+	};
+};
+
+&dphy {
+	status = "okay";
+};
+
+&emac {
+	phy-handle = <&int_mii_phy>;
+	phy-mode = "mii";
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+
+	axp209: pmic@34 {
+		reg = <0x34>;
+		interrupt-parent = <&nmi_intc>;
+		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+	};
+};
+
+&i2c1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pe_pins>;
+	status = "okay";
+
+	ov2640: camera@30 {
+		compatible = "ovti,ov2640";
+		reg = <0x30>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&csi1_mclk_pin>;
+		assigned-clocks = <&ccu CLK_CSI1_MCLK>;
+		assigned-clock-rates = <24000000>;
+		resetb-gpios = <&pio 4 16 GPIO_ACTIVE_HIGH>;
+		pwdn-gpios = <&pio 4 17 GPIO_ACTIVE_LOW>;
+		clocks = <&ccu CLK_CSI1_MCLK>;
+		clock-names = "xvclk";
+		status = "okay";
+
+		port {
+			ov2640_out_csi1: endpoint {
+				remote-endpoint = <&csi1_in_ov2640>;
+				bus-width = <8>;
+				hsync-active = <1>; /* Active high */
+				vsync-active = <0>; /* Active low */
+				data-active = <1>;  /* Active high */
+				pclk-sample = <1>;  /* Rising */
+			};
+		};
+	};
+
+	imx219: camera@10 {
+		compatible = "sony,imx219";
+		reg = <0x10>;
+		clocks = <&imx219_clock>;
+		clock-names = "xclk";
+		VDIG-supply = <&imx219_supply_vdig>;
+		VANA-supply = <&imx219_supply_vana>;
+		VDDL-supply = <&imx219_supply_vddl>;
+
+		port {
+			imx219_out_mipi_csi2: endpoint {
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <456000000>;
+
+				remote-endpoint = <&mipi_csi2_in_imx219>;
+			};
+		};
+	};
+};
+
+&mipi_csi2 {
+	status = "okay";
+};
+
+&mipi_csi2_in {
+	mipi_csi2_in_imx219: endpoint {
+		data-lanes = <1 2>;
+
+		remote-endpoint = <&imx219_out_mipi_csi2>;
+	};
+};
+
+&mmc0 {
+	vmmc-supply = <&reg_dcdc3>;
+	bus-width = <4>;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>; /* PF6 */
+	status = "okay";
+};
+
+&pio {
+	vcc-pd-supply = <&reg_dcdc3>;
+	vcc-pe-supply = <&reg_dcdc3>;
+};
+
+#include "axp209.dtsi"
+
+&battery_power_supply {
+	status = "okay";
+};
+
+&reg_dcdc2 {
+	regulator-always-on;
+	regulator-min-microvolt = <1250000>;
+	regulator-max-microvolt = <1250000>;
+	regulator-name = "vdd-sys-cpu-ephy";
+};
+
+&reg_dcdc3 {
+	regulator-always-on;
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-name = "vcc-3v3";
+};
+
+&reg_ldo2 {
+	regulator-always-on;
+	regulator-min-microvolt = <3000000>;
+	regulator-max-microvolt = <3000000>;
+	regulator-name = "avcc";
+};
+
+&reg_ldo3 {
+	regulator-always-on; /* FIXME: OV2640 does not support regulators. */
+	regulator-min-microvolt = <1200000>;
+	regulator-max-microvolt = <1200000>;
+	regulator-name = "dvdd-1v2-csi";
+};
+
+&reg_ldo4 {
+	regulator-always-on; /* FIXME: OV2640 does not support regulators. */
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+	regulator-name = "avdd-2v8-csi";
+};
+
+&usb_power_supply {
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-0 = <&uart1_pg_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&usbphy {
+	usb0_id_det-gpios = <&pio 6 9 GPIO_ACTIVE_HIGH>; /* PG9 */
+	usb0_vbus_det-gpios = <&pio 1 10 GPIO_ACTIVE_HIGH>; /* PB10 */
+	/* usb0_vbus-supply = <&reg_usb0_vbus>; */ /* TODO: from AXP */
+	status = "okay";
+};
