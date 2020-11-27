@@ -43,6 +43,7 @@ properties:
   # See ./video-interfaces.txt for details
   port:
     type: object
+    deprecated: true
 
     properties:
       endpoint:
@@ -66,6 +67,56 @@ properties:
       - endpoint
 
     additionalProperties: false
+
+  ports:
+    type: object
+
+    properties:
+      port@0:
+        type: object
+        description: Parallel input port, connect to a parallel sensor
+
+        properties:
+          reg:
+            const: 0
+
+          endpoint:
+            type: object
+
+            properties:
+              remote-endpoint: true
+
+              bus-width:
+                enum: [ 8, 10, 12, 16 ]
+
+              pclk-sample: true
+              hsync-active: true
+              vsync-active: true
+
+            required:
+              - bus-width
+              - remote-endpoint
+
+        additionalProperties: false
+
+      port@1:
+        type: object
+        description: MIPI CSI-2 bridge input port
+
+        properties:
+          reg:
+            const: 1
+
+          endpoint:
+            type: object
+
+            properties:
+              remote-endpoint: true
+
+            required:
+              - remote-endpoint
+
+        additionalProperties: false
 
 required:
   - compatible
@@ -95,19 +146,25 @@ examples:
                       "ram";
         resets = <&ccu RST_BUS_CSI>;
 
-        port {
-            /* Parallel bus endpoint */
-            csi1_ep: endpoint {
-                remote-endpoint = <&adv7611_ep>;
-                bus-width = <16>;
+        ports {
+            #address-cells = <1>;
+            #size-cells = <0>;
 
-                /*
-                 * If hsync-active/vsync-active are missing,
-                 * embedded BT.656 sync is used.
-                 */
-                 hsync-active = <0>; /* Active low */
-                 vsync-active = <0>; /* Active low */
-                 pclk-sample = <1>;  /* Rising */
+            port@0 {
+                reg = <0>;
+                /* Parallel bus endpoint */
+                csi1_ep: endpoint {
+                    remote-endpoint = <&adv7611_ep>;
+                    bus-width = <16>;
+
+                    /*
+                     * If hsync-active/vsync-active are missing,
+                     * embedded BT.656 sync is used.
+                     */
+                     hsync-active = <0>; /* Active low */
+                     vsync-active = <0>; /* Active low */
+                     pclk-sample = <1>;  /* Rising */
+                };
             };
         };
     };
