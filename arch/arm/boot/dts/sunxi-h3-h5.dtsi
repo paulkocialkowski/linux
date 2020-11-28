@@ -803,6 +803,15 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&csi_pins>;
 			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				csi_in_parallel: port@0 {
+					reg = <0>;
+				};
+			};
 		};
 
 		hdmi: hdmi@1ee0000 {
