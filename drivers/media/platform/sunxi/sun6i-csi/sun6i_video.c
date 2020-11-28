@@ -72,22 +72,6 @@ static bool is_pixformat_valid(unsigned int pixformat)
 	return false;
 }
 
-static struct v4l2_subdev *
-sun6i_video_remote_subdev(struct sun6i_video *video, u32 *pad)
-{
-	struct media_pad *remote;
-
-	remote = media_entity_remote_pad(&video->pad);
-
-	if (!remote || !is_media_entity_v4l2_subdev(remote->entity))
-		return NULL;
-
-	if (pad)
-		*pad = remote->index;
-
-	return media_entity_to_v4l2_subdev(remote->entity);
-}
-
 static int sun6i_video_queue_setup(struct vb2_queue *vq,
 				   unsigned int *nbuffers,
 				   unsigned int *nplanes,
@@ -150,7 +134,7 @@ static int sun6i_video_start_streaming(struct vb2_queue *vq, unsigned int count)
 		goto stop_media_pipeline;
 	}
 
-	subdev = sun6i_video_remote_subdev(video, NULL);
+	subdev = video->source_subdev;
 	if (!subdev)
 		goto stop_media_pipeline;
 
@@ -206,6 +190,7 @@ stop_csi_stream:
 	sun6i_csi_set_stream(video->csi, false);
 stop_media_pipeline:
 	media_pipeline_stop(&video->vdev.entity);
+	video->source_subdev = NULL;
 clear_dma_queue:
 	spin_lock_irqsave(&video->dma_queue_lock, flags);
 	list_for_each_entry(buf, &video->dma_queue, list)
@@ -223,13 +208,16 @@ static void sun6i_video_stop_streaming(struct vb2_queue *vq)
 	unsigned long flags;
 	struct sun6i_csi_buffer *buf;
 
-	subdev = sun6i_video_remote_subdev(video, NULL);
+	subdev = video->source_subdev;
 	if (subdev)
 		v4l2_subdev_call(subdev, video, s_stream, 0);
 
 	sun6i_csi_set_stream(video->csi, false);
 
-	media_pipeline_stop(&video->vdev.entity);
+	if (subdev)
+		media_pipeline_stop(&video->vdev.entity);
+
+	video->source_subdev = NULL;
 
 	/* Release all active buffers */
 	spin_lock_irqsave(&video->dma_queue_lock, flags);
@@ -550,14 +538,34 @@ static int sun6i_video_link_validate(struct media_link *link)
 						 struct video_device, entity);
 	struct sun6i_video *video = video_get_drvdata(vdev);
 	struct v4l2_subdev_format source_fmt;
+	struct v4l2_subdev *subdev;
 	int ret;
 
 	video->mbus_code = 0;
 
-	if (!media_entity_remote_pad(link->sink->entity->pads)) {
+	if (!link->source) {
 		dev_info(video->csi->dev,
 			 "video node %s pad not connected\n", vdev->name);
 		return -ENOLINK;
+	}
+
+	if (!is_media_entity_v4l2_subdev(link->source->entity))
+		return -ENODEV;
+
+	subdev = media_entity_to_v4l2_subdev(link->source->entity);
+
+	if (video->source_subdev) {
+		dev_err(video->csi->dev,
+			"unable to connect both parallel and MIPI CSI-2 bridge interfaces\n");
+		return -ENOLINK;
+	}
+
+	if (link->sink == &video->pads[0]) {
+		video->source_endpoint = &video->parallel_endpoint;
+		video->source_subdev = subdev;
+	} else if (link->sink == &video->pads[1]) {
+		video->source_endpoint = &video->mipi_csi2_bridge_endpoint;
+		video->source_subdev = subdev;
 	}
 
 	ret = sun6i_video_link_validate_get_format(link->source, &source_fmt);
@@ -603,9 +611,10 @@ int sun6i_video_init(struct sun6i_video *video, struct sun6i_csi *csi,
 	video->csi = csi;
 
 	/* Initialize the media entity... */
-	video->pad.flags = MEDIA_PAD_FL_SINK | MEDIA_PAD_FL_MUST_CONNECT;
+	video->pads[0].flags = MEDIA_PAD_FL_SINK;
+	video->pads[1].flags = MEDIA_PAD_FL_SINK;
 	vdev->entity.ops = &sun6i_video_media_ops;
-	ret = media_entity_pads_init(&vdev->entity, 1, &video->pad);
+	ret = media_entity_pads_init(&vdev->entity, 2, video->pads);
 	if (ret < 0)
 		return ret;
 

@@ -40,9 +40,6 @@ struct sun6i_csi {
 
 	struct v4l2_async_notifier	notifier;
 
-	/* video port settings */
-	struct v4l2_fwnode_endpoint	v4l2_ep;
-
 	struct sun6i_csi_config		config;
 
 	struct sun6i_video		video;

@@ -15,10 +15,15 @@ struct sun6i_csi;
 
 struct sun6i_video {
 	struct video_device		vdev;
-	struct media_pad		pad;
+	struct media_pad		pads[2];
 	struct sun6i_csi		*csi;
 
 	struct mutex			lock;
+
+	struct v4l2_fwnode_endpoint	parallel_endpoint;
+	struct v4l2_fwnode_endpoint	mipi_csi2_bridge_endpoint;
+	struct v4l2_fwnode_endpoint	*source_endpoint;
+	struct v4l2_subdev		*source_subdev;
 
 	struct vb2_queue		vb2_vidq;
 	spinlock_t			dma_queue_lock;
