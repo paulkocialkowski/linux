@@ -41,9 +41,6 @@ struct sun6i_csi {
 	struct v4l2_async_subdev	subdev;
 	struct v4l2_async_notifier	notifier;
 
-	/* video port settings */
-	struct v4l2_fwnode_endpoint	v4l2_ep;
-
 	struct sun6i_csi_config		config;
 
 	struct sun6i_video		video;
@@ -52,11 +49,13 @@ struct sun6i_csi {
 /**
  * sun6i_csi_is_format_supported() - check if the format supported by csi
  * @csi:	pointer to the csi
+ * @endpoint:	pointer to the endpoint to check
  * @pixformat:	v4l2 pixel format (V4L2_PIX_FMT_*)
  * @mbus_code:	media bus format code (MEDIA_BUS_FMT_*)
  */
-bool sun6i_csi_is_format_supported(struct sun6i_csi *csi, u32 pixformat,
-				   u32 mbus_code);
+bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+				   struct v4l2_fwnode_endpoint *endpoint,
+				   u32 pixformat, u32 mbus_code);
 
 /**
  * sun6i_csi_set_power() - power on/off the csi

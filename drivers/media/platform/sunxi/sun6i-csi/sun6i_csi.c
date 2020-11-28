@@ -48,6 +48,7 @@ static inline struct sun6i_csi_dev *sun6i_csi_to_dev(struct sun6i_csi *csi)
 
 /* TODO add 10&12 bit YUV, RGB support */
 bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+				   struct v4l2_fwnode_endpoint *endpoint,
 				   u32 pixformat, u32 mbus_code)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
@@ -57,9 +58,9 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
 	 * 8bit and 16bit bus width.
 	 * Identify the media bus format from device tree.
 	 */
-	if ((sdev->csi.v4l2_ep.bus_type == V4L2_MBUS_PARALLEL
-	     || sdev->csi.v4l2_ep.bus_type == V4L2_MBUS_BT656)
-	     && sdev->csi.v4l2_ep.bus.parallel.bus_width == 16) {
+	if ((endpoint->bus_type == V4L2_MBUS_PARALLEL ||
+	     endpoint->bus_type == V4L2_MBUS_BT656) &&
+	    endpoint->bus.parallel.bus_width == 16) {
 		switch (pixformat) {
 		case V4L2_PIX_FMT_HM12:
 		case V4L2_PIX_FMT_NV12:
@@ -372,7 +373,7 @@ static enum csi_input_seq get_csi_input_seq(struct sun6i_csi_dev *sdev,
 
 static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 {
-	struct v4l2_fwnode_endpoint *endpoint = &sdev->csi.v4l2_ep;
+	struct v4l2_fwnode_endpoint *endpoint = sdev->csi.video.source_endpoint;
 	struct sun6i_csi *csi = &sdev->csi;
 	unsigned char bus_width;
 	u32 flags;
@@ -457,6 +458,9 @@ static void sun6i_csi_setup_bus(struct sun6i_csi_dev *sdev)
 
 		if (flags & V4L2_MBUS_PCLK_SAMPLE_FALLING)
 			cfg |= CSI_IF_CFG_CLK_POL_FALLING_EDGE;
+		break;
+	case V4L2_MBUS_CSI2_DPHY:
+		cfg |= CSI_IF_CFG_MIPI_IF_MIPI;
 		break;
 	default:
 		dev_warn(sdev->dev, "Unsupported bus type: %d\n",
@@ -635,11 +639,11 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
  * Media Controller and V4L2
  */
 static int sun6i_csi_link_entity(struct sun6i_csi *csi,
+				 struct media_pad *sink_pad,
 				 struct media_entity *entity,
-				 struct fwnode_handle *fwnode)
+				 struct fwnode_handle *fwnode, bool enabled)
 {
 	struct media_entity *sink;
-	struct media_pad *sink_pad;
 	int src_pad_index;
 	int ret;
 
@@ -653,14 +657,12 @@ static int sun6i_csi_link_entity(struct sun6i_csi *csi,
 	src_pad_index = ret;
 
 	sink = &csi->video.vdev.entity;
-	sink_pad = &csi->video.pad;
 
 	dev_dbg(csi->dev, "creating %s:%u -> %s:%u link\n",
 		entity->name, src_pad_index, sink->name, sink_pad->index);
 	ret = media_create_pad_link(entity, src_pad_index, sink,
 				    sink_pad->index,
-				    MEDIA_LNK_FL_ENABLED |
-				    MEDIA_LNK_FL_IMMUTABLE);
+				    enabled ? MEDIA_LNK_FL_ENABLED : 0);
 	if (ret < 0) {
 		dev_err(csi->dev, "failed to create %s:%u -> %s:%u link\n",
 			entity->name, src_pad_index,
@@ -675,19 +677,67 @@ static int sun6i_subdev_notify_complete(struct v4l2_async_notifier *notifier)
 {
 	struct sun6i_csi *csi = container_of(notifier, struct sun6i_csi,
 					     notifier);
+	struct sun6i_video *video = &csi->video;
 	struct v4l2_device *v4l2_dev = &csi->v4l2_dev;
-	struct v4l2_subdev *sd;
+	struct v4l2_subdev *parallel_sd = NULL;
+	struct v4l2_subdev *mipi_csi2_bridge_sd = NULL;
+	struct fwnode_handle *handle = NULL;
 	int ret;
 
 	dev_dbg(csi->dev, "notify complete, all subdevs registered\n");
 
-	sd = list_first_entry(&v4l2_dev->subdevs, struct v4l2_subdev, list);
-	if (!sd)
-		return -EINVAL;
+	/* Find the subdevs that match our fwnode ports. */
+	while (1) {
+		struct v4l2_fwnode_link link;
+		struct v4l2_subdev *sd;
 
-	ret = sun6i_csi_link_entity(csi, &sd->entity, sd->fwnode);
-	if (ret < 0)
-		return ret;
+		handle = fwnode_graph_get_next_endpoint(dev_fwnode(csi->dev),
+							handle);
+		if (!handle)
+			break;
+
+		ret = v4l2_fwnode_parse_link(handle, &link);
+		if (ret)
+			break;
+
+		list_for_each_entry(sd, &v4l2_dev->subdevs, list) {
+			if (!sd->fwnode || link.remote_node != sd->fwnode)
+				continue;
+
+			switch (link.local_port) {
+			case 0:
+				parallel_sd = sd;
+				break;
+			case 1:
+				mipi_csi2_bridge_sd = sd;
+				break;
+			}
+		}
+
+		v4l2_fwnode_put_link(&link);
+	}
+
+	if (parallel_sd) {
+		dev_dbg(csi->dev, "linking parallel interface subdev\n");
+
+		ret = sun6i_csi_link_entity(csi, &video->pads[0],
+					    &parallel_sd->entity,
+					    parallel_sd->fwnode, true);
+		if (ret < 0)
+			return ret;
+	}
+
+	if (mipi_csi2_bridge_sd) {
+		dev_dbg(csi->dev, "linking MIPI CSI-2 bridge subdev\n");
+
+		/* Mark the link as disabled if a parallel subdev is there. */
+		ret = sun6i_csi_link_entity(csi, &video->pads[1],
+					    &mipi_csi2_bridge_sd->entity,
+					    mipi_csi2_bridge_sd->fwnode,
+					    parallel_sd ? false : true);
+		if (ret < 0)
+			return ret;
+	}
 
 	ret = v4l2_device_register_subdev_nodes(&csi->v4l2_dev);
 	if (ret < 0)
@@ -713,17 +763,18 @@ static void sun6i_csi_v4l2_cleanup(struct sun6i_csi *csi)
 
 static int sun6i_csi_v4l2_fwnode_init(struct sun6i_csi *csi)
 {
+	struct sun6i_video *video = &csi->video;
 	struct v4l2_fwnode_endpoint *endpoint = NULL;
 	struct fwnode_handle *handle = NULL;
 	int ret;
 
 	/* Parallel */
 
-	endpoint = &csi->v4l2_ep;
+	endpoint = &video->parallel_endpoint;
 	handle = fwnode_graph_get_endpoint_by_id(dev_fwnode(csi->dev), 0, 0,
 						 FWNODE_GRAPH_ENDPOINT_NEXT);
 	if (!handle)
-		return 0;
+		goto mipi_csi2_bridge;
 
 	ret = v4l2_fwnode_endpoint_parse(handle, endpoint);
 	if (ret)
@@ -743,6 +794,30 @@ static int sun6i_csi_v4l2_fwnode_init(struct sun6i_csi *csi)
 		goto error;
 
 	fwnode_handle_put(handle);
+
+	/* MIPI CSI-2 bridge */
+
+mipi_csi2_bridge:
+	endpoint = &video->mipi_csi2_bridge_endpoint;
+	handle = fwnode_graph_get_endpoint_by_id(dev_fwnode(csi->dev), 1, 0,
+						 FWNODE_GRAPH_ENDPOINT_NEXT);
+	if (!handle)
+		return 0;
+
+	ret = v4l2_fwnode_endpoint_parse(handle, endpoint);
+	if (ret)
+		goto error;
+
+	ret = v4l2_async_notifier_add_fwnode_remote_subdev(&csi->notifier,
+							   handle,
+							   &csi->subdev);
+	if (ret)
+		goto error;
+
+	fwnode_handle_put(handle);
+
+	/* Set this for our local convenience. */
+	endpoint->bus_type = V4L2_MBUS_CSI2_DPHY;
 
 	return 0;
 
