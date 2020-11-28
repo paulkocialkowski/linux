@@ -540,6 +540,15 @@
 			clock-names = "bus", "mod", "ram";
 			resets = <&ccu RST_BUS_CSI>;
 			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				csi1_in_parallel: port@0 {
+					reg = <0>;
+				};
+			};
 		};
 
 		gic: interrupt-controller@1c81000 {
