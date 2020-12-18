@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR X11)
+/*
+ * Copyright 2020 Paul Kocialkowski <contact@paulk.fr>
+ */
+
+#include "sun8i-v3-sl631.dtsi"
+
+/ {
+	model = "SL631 Action Camera with OV4689";
+	compatible = "allwinner,sl631-ov4689", "allwinner,sl631",
+		     "allwinner,sun8i-v3";
+
+	reg_ov4689_avdd: ov4689-avdd {
+		compatible = "regulator-fixed";
+		regulator-name = "ov4689-avdd";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		vin-supply = <&reg_ldo3>;
+	};
+
+	reg_ov4689_dvdd: ov4689-dvdd {
+		compatible = "regulator-fixed";
+		regulator-name = "ov4689-dvdd";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+	};
+
+	reg_ov4689_dovdd: ov4689-dovdd {
+		compatible = "regulator-fixed";
+		regulator-name = "ov4689-dovdd";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&reg_ldo3>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		csi0_memory: pool {
+			compatible = "shared-dma-pool";
+			size = <0x2000000>;
+			no-align;
+			no-map;
+		};
+	};
+};
+
+&csi0 {
+	memory-region = <&csi0_memory>;
+	status = "okay";
+};
+
+&dphy {
+	status = "okay";
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_pe_pins>;
+
+	ov4689: camera@36 {
+		compatible = "ovti,ov4689";
+		reg = <0x36>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&csi0_mclk_pin>;
+		clocks = <&ccu CLK_CSI0_MCLK>;
+		assigned-clocks = <&ccu CLK_CSI0_MCLK>;
+		assigned-clock-rates = <24000000>;
+		avdd-supply = <&reg_ov4689_avdd>;
+		dovdd-supply = <&reg_ov4689_dovdd>;
+		dvdd-supply = <&reg_ov4689_dvdd>;
+		powerdown-gpios = <&pio 4 19 GPIO_ACTIVE_LOW>; /* PE19*/
+		reset-gpios = <&pio 4 18 GPIO_ACTIVE_LOW>; /* PE18 */
+
+		port {
+			ov4689_out_mipi_csi2: endpoint {
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <360000000>;
+
+				remote-endpoint = <&mipi_csi2_in_ov4689>;
+			};
+		};
+	};
+};
+
+&mipi_csi2 {
+	status = "okay";
+};
+
+&mipi_csi2_in {
+	mipi_csi2_in_ov4689: endpoint {
+		data-lanes = <1 2 3 4>;
+
+		remote-endpoint = <&ov4689_out_mipi_csi2>;
+	};
+};
