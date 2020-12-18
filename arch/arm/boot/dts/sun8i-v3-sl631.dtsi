@@ -9,6 +9,7 @@
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
+#include <dt-bindings/pwm/pwm.h>
 
 / {
 	model = "SL631 Action Camera";
@@ -16,6 +17,14 @@
 
 	aliases {
 		serial0 = &uart1;
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 0 50000 PWM_POLARITY_INVERTED>;
+		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
+		default-brightness-level = <8>;
+		enable-gpios = <&pio 1 13 GPIO_ACTIVE_HIGH>; /* PB13 */
 	};
 
 	chosen {
@@ -49,6 +58,7 @@
 
 &i2c1 {
 	pinctrl-names = "default";
+	/* for EP952 */
 	pinctrl-0 = <&i2c1_pb_pins>;
 	status = "okay";
 };
@@ -91,6 +101,12 @@
 	vcc-pe-supply = <&reg_ldo3>;
 };
 
+&pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm0_pin>;
+	status = "okay";
+};
+
 #include "axp209.dtsi"
 
 &ac_power_supply {
@@ -131,6 +147,13 @@
 	regulator-min-microvolt = <2800000>;
 	regulator-max-microvolt = <2800000>;
 	regulator-name = "vdd-2v8";
+};
+
+&reg_ldo4 {
+	regulator-always-on;
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-name = "ep952-vdd";
 };
 
 &spi0 {
