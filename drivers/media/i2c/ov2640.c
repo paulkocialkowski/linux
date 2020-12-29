@@ -1109,7 +1109,7 @@ static int ov2640_video_probe(struct i2c_client *client)
 		goto done;
 	}
 
-	dev_info(&client->dev,
+	printk(KERN_ERR,
 		 "%s Product ID %0x:%0x Manufacturer ID %x:%x\n",
 		 devname, pid, ver, midh, midl);
 

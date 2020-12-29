@@ -1227,6 +1227,8 @@ static int imx219_identify_module(struct imx219 *imx219)
 		return -EIO;
 	}
 
+	printk(KERN_ERR "good chip id %x\n", val);
+
 	return 0;
 }
 
@@ -1452,7 +1454,7 @@ static int imx219_probe(struct i2c_client *client)
 
 	ret = imx219_get_regulators(imx219);
 	if (ret) {
-		dev_err(dev, "failed to get regulators\n");
+		dev_err(dev, "failed to get regulators %d\n", ret);
 		return ret;
 	}
 
