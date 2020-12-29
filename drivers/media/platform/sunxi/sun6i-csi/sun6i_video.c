@@ -537,6 +537,7 @@ static int sun6i_video_link_validate(struct media_link *link)
 	struct video_device *vdev = container_of(link->sink->entity,
 						 struct video_device, entity);
 	struct sun6i_video *video = video_get_drvdata(vdev);
+	struct v4l2_fwnode_endpoint *endpoint;
 	struct v4l2_subdev_format source_fmt;
 	struct v4l2_subdev *subdev;
 	int ret;
@@ -560,19 +561,18 @@ static int sun6i_video_link_validate(struct media_link *link)
 		return -ENOLINK;
 	}
 
-	if (link->sink == &video->pads[0]) {
-		video->source_endpoint = &video->parallel_endpoint;
-		video->source_subdev = subdev;
-	} else if (link->sink == &video->pads[1]) {
-		video->source_endpoint = &video->mipi_csi2_bridge_endpoint;
-		video->source_subdev = subdev;
-	}
+	if (link->sink == &video->pads[0])
+		endpoint = &video->parallel_endpoint;
+	else if (link->sink == &video->pads[1])
+		endpoint = &video->mipi_csi2_bridge_endpoint;
+	else
+		return -EINVAL;
 
 	ret = sun6i_video_link_validate_get_format(link->source, &source_fmt);
 	if (ret < 0)
 		return ret;
 
-	if (!sun6i_csi_is_format_supported(video->csi,
+	if (!sun6i_csi_is_format_supported(video->csi, endpoint,
 					   video->fmt.fmt.pix.pixelformat,
 					   source_fmt.format.code)) {
 		dev_err(video->csi->dev,
@@ -592,6 +592,8 @@ static int sun6i_video_link_validate(struct media_link *link)
 	}
 
 	video->mbus_code = source_fmt.format.code;
+	video->source_endpoint = endpoint;
+	video->source_subdev = subdev;
 
 	return 0;
 }

@@ -49,10 +49,10 @@ static inline struct sun6i_csi_dev *sun6i_csi_to_dev(struct sun6i_csi *csi)
 
 /* TODO add 10&12 bit YUV, RGB support */
 bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+				   struct v4l2_fwnode_endpoint *endpoint,
 				   u32 pixformat, u32 mbus_code)
 {
 	struct sun6i_csi_dev *sdev = sun6i_csi_to_dev(csi);
-	struct v4l2_fwnode_endpoint *endpoint = sdev->csi.video.source_endpoint;
 
 	/*
 	 * Some video receivers have the ability to be compatible with
