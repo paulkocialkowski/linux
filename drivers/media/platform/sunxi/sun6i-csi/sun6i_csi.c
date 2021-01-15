@@ -692,28 +692,6 @@ static const struct v4l2_async_notifier_operations sun6i_csi_async_ops = {
 	.complete = sun6i_subdev_notify_complete,
 };
 
-static int sun6i_csi_fwnode_parse(struct device *dev,
-				  struct v4l2_fwnode_endpoint *vep,
-				  struct v4l2_async_subdev *asd)
-{
-	struct sun6i_csi *csi = dev_get_drvdata(dev);
-
-	if (vep->base.port || vep->base.id) {
-		dev_warn(dev, "Only support a single port with one endpoint\n");
-		return -ENOTCONN;
-	}
-
-	switch (vep->bus_type) {
-	case V4L2_MBUS_PARALLEL:
-	case V4L2_MBUS_BT656:
-		csi->v4l2_ep = *vep;
-		return 0;
-	default:
-		dev_err(dev, "Unsupported media bus type\n");
-		return -ENOTCONN;
-	}
-}
-
 static void sun6i_csi_v4l2_cleanup(struct sun6i_csi *csi)
 {
 	media_device_unregister(&csi->media_dev);
@@ -723,6 +701,48 @@ static void sun6i_csi_v4l2_cleanup(struct sun6i_csi *csi)
 	v4l2_device_unregister(&csi->v4l2_dev);
 	v4l2_ctrl_handler_free(&csi->ctrl_handler);
 	media_device_cleanup(&csi->media_dev);
+}
+
+static int sun6i_csi_v4l2_fwnode_init(struct sun6i_csi *csi)
+{
+	struct v4l2_fwnode_endpoint *endpoint = NULL;
+	struct fwnode_handle *handle = NULL;
+	int ret;
+
+	/* Parallel */
+
+	endpoint = &csi->v4l2_ep;
+	handle = fwnode_graph_get_endpoint_by_id(dev_fwnode(csi->dev), 0, 0,
+						 FWNODE_GRAPH_ENDPOINT_NEXT);
+	if (!handle)
+		return 0;
+
+	ret = v4l2_fwnode_endpoint_parse(handle, endpoint);
+	if (ret)
+		goto error;
+
+	if (endpoint->bus_type != V4L2_MBUS_PARALLEL &&
+	    endpoint->bus_type != V4L2_MBUS_BT656) {
+		dev_err(csi->dev, "Unsupported parallel media bus type\n");
+		ret = -ENOTCONN;
+		goto error;
+	}
+
+	ret = v4l2_async_notifier_add_fwnode_remote_subdev(&csi->notifier,
+							   handle,
+							   &csi->subdev);
+	if (ret)
+		goto error;
+
+	fwnode_handle_put(handle);
+
+	return 0;
+
+error:
+	if (handle)
+		fwnode_handle_put(handle);
+
+	return ret;
 }
 
 static int sun6i_csi_v4l2_init(struct sun6i_csi *csi)
@@ -759,10 +779,7 @@ static int sun6i_csi_v4l2_init(struct sun6i_csi *csi)
 	if (ret)
 		goto unreg_v4l2;
 
-	ret = v4l2_async_notifier_parse_fwnode_endpoints(csi->dev,
-							 &csi->notifier,
-							 sizeof(struct v4l2_async_subdev),
-							 sun6i_csi_fwnode_parse);
+	ret = sun6i_csi_v4l2_fwnode_init(csi);
 	if (ret)
 		goto clean_video;
 

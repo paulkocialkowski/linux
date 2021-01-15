@@ -38,6 +38,7 @@ struct sun6i_csi {
 	struct v4l2_device		v4l2_dev;
 	struct media_device		media_dev;
 
+	struct v4l2_async_subdev	subdev;
 	struct v4l2_async_notifier	notifier;
 
 	/* video port settings */
