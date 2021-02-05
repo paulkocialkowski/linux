@@ -306,7 +306,7 @@ static int cedrus_open(struct file *file)
 	}
 
 	v4l2_fh_init(&ctx->fh, video_devdata(file));
-	file->private_data = &ctx->fh;
+	file->private_data = &ctx->fh; /* XXX: would be easier to just set ctx */
 	ctx->dev = dev;
 
 	ret = cedrus_init_ctrls(dev, ctx);
@@ -433,6 +433,7 @@ static int cedrus_probe(struct platform_device *pdev)
 	vfd->lock = &dev->dev_mutex;
 	vfd->v4l2_dev = &dev->v4l2_dev;
 
+	/* XXX: how is that needed? */
 	snprintf(vfd->name, sizeof(vfd->name), "%s", cedrus_video_device.name);
 	video_set_drvdata(vfd, dev);
 
@@ -503,6 +504,7 @@ static int cedrus_remove(struct platform_device *pdev)
 		media_device_cleanup(&dev->mdev);
 	}
 
+	/* FIXME: register order is: video-m2m-v4l2 */
 	v4l2_m2m_release(dev->m2m_dev);
 	video_unregister_device(&dev->vfd);
 	v4l2_device_unregister(&dev->v4l2_dev);
