@@ -95,17 +95,6 @@
 	status = "okay";
 };
 
-&csi1_in_parallel {
-	csi1_in_ov2640: endpoint {
-		remote-endpoint = <&ov2640_out_csi1>;
-		bus-width = <8>;
-		hsync-active = <1>; /* Active high */
-		vsync-active = <0>; /* Active low */
-		data-active = <1>;  /* Active high */
-		pclk-sample = <1>;  /* Rising */
-	};
-};
-
 &dphy {
 	status = "okay";
 };
@@ -143,17 +132,6 @@
 		clocks = <&ccu CLK_CSI1_MCLK>;
 		clock-names = "xvclk";
 		status = "okay";
-
-		port {
-			ov2640_out_csi1: endpoint {
-				remote-endpoint = <&csi1_in_ov2640>;
-				bus-width = <8>;
-				hsync-active = <1>; /* Active high */
-				vsync-active = <0>; /* Active low */
-				data-active = <1>;  /* Active high */
-				pclk-sample = <1>;  /* Rising */
-			};
-		};
 	};
 
 	imx219: camera@10 {
