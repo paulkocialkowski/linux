@@ -30,6 +30,7 @@
 		};
 	};
 
+/*
 	reserved-memory {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -42,6 +43,7 @@
 			no-map;
 		};
 	};
+*/
 
 	imx219_supply_parent: imx219-supply-parent {
 		compatible = "regulator-fixed";
@@ -85,7 +87,7 @@
 };
 
 &csi0 {
-	memory-region = <&csi0_memory>;
+/*	memory-region = <&csi0_memory>; */
 	status = "okay";
 };
 
