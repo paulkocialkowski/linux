@@ -898,6 +898,8 @@ static irqreturn_t sun6i_csi_isr(int irq, void *dev_id)
 	struct regmap *regmap = sdev->regmap;
 	u32 status;
 
+	printk(KERN_ERR "%s()\n", __func__);
+
 	regmap_read(regmap, CSI_CH_INT_STA_REG, &status);
 
 	if (!(status & 0xFF))
@@ -971,8 +973,8 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 	if (irq < 0)
 		return -ENXIO;
 
-	ret = devm_request_irq(&pdev->dev, irq, sun6i_csi_isr, 0, MODULE_NAME,
-			       sdev);
+	ret = devm_request_irq(&pdev->dev, irq, sun6i_csi_isr, IRQF_SHARED,
+			       MODULE_NAME, sdev);
 	if (ret) {
 		dev_err(&pdev->dev, "Cannot request csi IRQ\n");
 		return ret;

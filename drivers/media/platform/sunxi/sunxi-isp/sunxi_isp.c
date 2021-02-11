@@ -73,16 +73,89 @@ static const struct sunxi_isp_format sunxi_isp_formats_dst[] = {
 	},
 };
 
+static irqreturn_t sunxi_isp_interrupt(int irq, void *private)
+{
+	struct sunxi_isp_device *isp_dev = private;
+	struct regmap *regmap = isp_dev->regmap;
+	u32 status;
+
+	printk(KERN_ERR "%s()\n", __func__);
+
+	regmap_read(regmap, SUNXI_ISP_FE_INT_STA_REG, &status);
+
+	if (!status)
+		return IRQ_NONE;
+
+	printk(KERN_ERR "%s: status is %#x\n", __func__, status);
+
+	regmap_write(regmap, SUNXI_ISP_FE_INT_STA_REG, status);
+
+	return IRQ_HANDLED;
+}
+
+#define ISP_LINEAR_LUT_LENS_GAMMA_MEM_SIZE 0xE00
+#define ISP_STAT_TOTAL_SIZE         0x2100
+#define ISP_DRC_DISC_MEM_SIZE            0x0600
+
 void sunxi_isp_device_run(void *private)
 {
 	struct sunxi_isp_context *isp_ctx = private;
+	struct sunxi_isp_device *isp_dev = isp_ctx->dev;
+	struct regmap *regmap = isp_dev->regmap;
 	struct v4l2_m2m_ctx *m2m_ctx = isp_ctx->v4l2_fh.m2m_ctx;
 	struct vb2_v4l2_buffer *buffer_src, *buffer_dst;
+	/* XXX: luma_src_dma_addr */
 	dma_addr_t dma_addr_luma_src, dma_addr_chroma_src;
 	dma_addr_t dma_addr_luma_dst, dma_addr_chroma_dst;
+	dma_addr_t lut_table_dma_addr, drc_table_dma_addr, stat_dma_addr;
+	dma_addr_t reg_load_dma_addr, reg_save_dma_addr;
+	void *lut_table, *drc_table, *stat, *reg_load, *reg_save;
+	unsigned int steps = 10;
+	u32 value;
+
+	lut_table = dma_alloc_coherent(isp_dev->dev, 0xe00, &lut_table_dma_addr, GFP_KERNEL);
+	drc_table = dma_alloc_coherent(isp_dev->dev, 0x600, &drc_table_dma_addr, GFP_KERNEL);
+	stat = dma_alloc_coherent(isp_dev->dev, 0x2100, &stat_dma_addr, GFP_KERNEL);
+
+/*
+	lut_table_dma_addr -= 0x40000000;
+	drc_table_dma_addr -= 0x40000000;
+	stat_dma_addr -= 0x40000000;
+*/
+
+	printk(KERN_ERR "LUT table %#x, DRC table %#x, stats %#x\n", lut_table_dma_addr, drc_table_dma_addr, stat_dma_addr);
+
+	reg_load = dma_alloc_coherent(isp_dev->dev, 0x1000, &reg_load_dma_addr, GFP_KERNEL);
+	reg_save = dma_alloc_coherent(isp_dev->dev, 0x1000, &reg_save_dma_addr, GFP_KERNEL);
+/*
+	reg_load_dma_addr -= 0x40000000;
+	reg_save_dma_addr -= 0x40000000;
+*/
+	printk(KERN_ERR "reg load %#x, reg save %#x\n", reg_load_dma_addr, reg_save_dma_addr);
 
 	buffer_src = v4l2_m2m_next_src_buf(m2m_ctx);
 	buffer_dst = v4l2_m2m_next_dst_buf(m2m_ctx);
+
+	/* Module */
+/*
+	value = SUNXI_ISP_MODULE_EN_SRC0 |
+		SUNXI_ISP_MODULE_EN_AE |
+		SUNXI_ISP_MODULE_EN_HIST |
+		SUNXI_ISP_MODULE_EN_AFS |
+		SUNXI_ISP_MODULE_EN_RGB2RGB |
+		SUNXI_ISP_MODULE_EN_BDNF |
+		SUNXI_ISP_MODULE_EN_LSC |
+		SUNXI_ISP_MODULE_EN_SATU |
+		SUNXI_ISP_MODULE_EN_SAP |
+		SUNXI_ISP_MODULE_EN_RGB_DRC;
+*/
+	value = SUNXI_ISP_MODULE_EN_SRC0 |
+		SUNXI_ISP_MODULE_EN_OBC;
+	regmap_write(regmap, SUNXI_ISP_MODULE_EN_REG, value);
+//	regmap_write(regmap, SUNXI_ISP_MODULE_EN_REG, SUNXI_ISP_MODULE_EN_SRC0);
+
+
+	/* FIXME: remove PHYS_BASE or what? */
 
 	dma_addr_luma_src =
 		vb2_dma_contig_plane_dma_addr(&buffer_src->vb2_buf, 0);
@@ -94,9 +167,112 @@ void sunxi_isp_device_run(void *private)
 	dma_addr_chroma_dst =
 		vb2_dma_contig_plane_dma_addr(&buffer_dst->vb2_buf, 1);
 
+/*
+	dma_addr_luma_src -= 0x40000000;
+	dma_addr_chroma_src -= 0x40000000;
+	dma_addr_luma_dst -= 0x40000000;
+	dma_addr_chroma_dst -= 0x40000000;
+*/
+
 	printk(KERN_ERR "%s: src %#x/%#x -> dst %#x/%#x\n", __func__,
 	       dma_addr_luma_src, dma_addr_chroma_src, dma_addr_luma_dst,
 	       dma_addr_chroma_dst);
+
+	/* Tables */
+
+	regmap_write(regmap, SUNXI_ISP_REG_LOAD_ADDR_REG,
+		     reg_load_dma_addr >> 2);
+	regmap_write(regmap, SUNXI_ISP_REG_SAVE_ADDR_REG,
+		     reg_save_dma_addr >> 2);
+
+	regmap_write(regmap, SUNXI_ISP_LUT_TABLE_ADDR_REG,
+		     lut_table_dma_addr >> 2);
+	regmap_write(regmap, SUNXI_ISP_DRC_TABLE_ADDR_REG,
+		     drc_table_dma_addr >> 2);
+	regmap_write(regmap, SUNXI_ISP_STATS_ADDR_REG,
+		     stat_dma_addr >> 2);
+
+	/* Mode */
+
+	/* BGGR */
+	value = SUNXI_ISP_MODE_INPUT_FMT(4) |
+		SUNXI_ISP_MODE_INPUT_YUV_SEQ(0) |
+		SUNXI_ISP_MODE_SHARP(1) |
+		SUNXI_ISP_MODE_HIST(2);
+	regmap_write(regmap, SUNXI_ISP_MODE_REG, value);
+
+	/* SRC0 Input */
+
+	regmap_write(regmap, SUNXI_ISP_IN_CFG_REG,
+		     SUNXI_ISP_IN_CFG_STRIDE_DIV16(1280 / 16));
+
+	regmap_write(regmap, SUNXI_ISP_IN_LUMA_RGB_ADDR0_REG,
+		     dma_addr_luma_src >> 2);
+
+	regmap_write(regmap, SUNXI_ISP_IN_CHROMA_ADDR0_REG,
+		     dma_addr_chroma_src >> 2);
+
+	/* MCH Output */
+
+	value = SUNXI_ISP_MCH_SIZE_CFG_WIDTH(1280) |
+		SUNXI_ISP_MCH_SIZE_CFG_HEIGHT(480);
+	regmap_write(regmap, SUNXI_ISP_MCH_SIZE_CFG_REG, value);
+
+	value = SUNXI_ISP_MCH_SCALE_CFG_X_RATIO(1) |
+		SUNXI_ISP_MCH_SCALE_CFG_Y_RATIO(1) |
+		SUNXI_ISP_MCH_SCALE_CFG_WEIGHT_SHIFT(0);
+	regmap_write(regmap, SUNXI_ISP_MCH_SIZE_CFG_REG, value);
+
+	/* YUV420 SP mode */
+	value = SUNXI_ISP_MCH_CFG_EN |
+		SUNXI_ISP_MCH_CFG_MODE(0) |
+		SUNXI_ISP_MCH_CFG_STRIDE_Y_DIV4(1280/4) |
+		SUNXI_ISP_MCH_CFG_STRIDE_UV_DIV4(1280/4);
+	regmap_write(regmap, SUNXI_ISP_MCH_CFG_REG, value);
+
+	regmap_write(regmap, SUNXI_ISP_MCH_Y_ADDR0_REG, dma_addr_luma_dst >> 2);
+	regmap_write(regmap, SUNXI_ISP_MCH_U_ADDR0_REG, dma_addr_chroma_dst >> 2);
+
+	/* Frontend Config */
+
+	value = SUNXI_ISP_FE_CFG_EN |
+		SUNXI_ISP_FE_CFG_SRC0_MODE(SUNXI_ISP_SRC_MODE_DRAM);
+
+	regmap_write(regmap, SUNXI_ISP_FE_CFG_REG, value);
+
+	/* SRAM Clear */
+
+	regmap_write(regmap, SUNXI_ISP_SRAM_RW_OFFSET_REG, BIT(31));
+
+	/* Interrupt */
+
+	regmap_write(regmap, SUNXI_ISP_FE_INT_LINE_NUM_REG, 4);
+
+	regmap_write(regmap, SUNXI_ISP_FE_INT_STA_REG, 0xff);
+	regmap_write(regmap, SUNXI_ISP_FE_INT_EN_REG, 0xff);
+/*
+		     SUNXI_ISP_FE_INT_EN_FINISH |
+		     SUNXI_ISP_FE_INT_EN_START |
+		     SUNXI_ISP_FE_INT_EN_SRC0_FIFO);
+*/
+
+	regmap_write(regmap, SUNXI_ISP_FE_ROT_OF_CFG_REG, 0x10);
+
+	/* Frontend Control */
+
+	value = SUNXI_ISP_FE_CTRL_VCAP_EN |
+		SUNXI_ISP_FE_CTRL_OUTPUT_SPEED_CTRL(3);
+	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
+/*
+	while (steps--) {
+		u32 status = 0;
+
+		mdelay(100);
+
+		regmap_read(regmap, SUNXI_ISP_FE_INT_STA_REG, &status);
+		printk(KERN_ERR "%s: IRQ status %#x\n", __func__, status);
+	}
+*/
 }
 
 static const struct v4l2_m2m_ops sunxi_isp_m2m_ops = {
@@ -108,12 +284,11 @@ static int sunxi_isp_querycap(struct file *file, void *private,
 {
 	printk(KERN_ERR "%s()\n", __func__);
 
-/*
 	strscpy(capability->driver, SUNXI_ISP_NAME, sizeof(capability->driver));
 	strscpy(capability->card, SUNXI_ISP_NAME, sizeof(capability->card));
 	snprintf(capability->bus_info, sizeof(capability->bus_info),
 		 "platform:%s", SUNXI_ISP_NAME);
-*/
+
 	printk(KERN_ERR "%s() out\n", __func__);
 
 	return 0;
@@ -196,6 +371,12 @@ static int sunxi_isp_g_fmt(struct file *file, void *private,
 	v4l2_format->fmt.pix_mp.pixelformat = format->pixelformat;
 	v4l2_format->fmt.pix_mp.width = setup->width;
 	v4l2_format->fmt.pix_mp.height = setup->height;
+	v4l2_format->fmt.pix_mp.num_planes = 2;
+	v4l2_format->fmt.pix_mp.plane_fmt[0].bytesperline = setup->width;
+	v4l2_format->fmt.pix_mp.plane_fmt[0].sizeimage = setup->width * setup->height;
+	v4l2_format->fmt.pix_mp.plane_fmt[1].bytesperline = setup->width;
+	v4l2_format->fmt.pix_mp.plane_fmt[1].sizeimage = setup->width * setup->height / 2;
+
 	/* TODO: the other stuff. */
 
 	return 0;
@@ -230,7 +411,7 @@ static int sunxi_isp_try_fmt(struct file *file, void *private,
 	if (i == formats_count)
 		format->fmt.pix_mp.pixelformat = formats[0].pixelformat;
 
-	return 0;
+	return sunxi_isp_g_fmt(file, private, format);
 }
 
 static int sunxi_isp_s_fmt(struct file *file, void *private,
@@ -284,14 +465,14 @@ static const struct v4l2_ioctl_ops sunxi_isp_ioctl_ops = {
 	.vidioc_querycap		= sunxi_isp_querycap,
 
 	.vidioc_enum_fmt_vid_cap	= sunxi_isp_enum_fmt,
-	.vidioc_g_fmt_vid_cap		= sunxi_isp_g_fmt,
-	.vidioc_try_fmt_vid_cap		= sunxi_isp_try_fmt,
-	.vidioc_s_fmt_vid_cap		= sunxi_isp_s_fmt,
+	.vidioc_g_fmt_vid_cap_mplane	= sunxi_isp_g_fmt,
+	.vidioc_try_fmt_vid_cap_mplane	= sunxi_isp_try_fmt,
+	.vidioc_s_fmt_vid_cap_mplane	= sunxi_isp_s_fmt,
 
 	.vidioc_enum_fmt_vid_out	= sunxi_isp_enum_fmt,
-	.vidioc_g_fmt_vid_out		= sunxi_isp_g_fmt,
-	.vidioc_try_fmt_vid_out		= sunxi_isp_try_fmt,
-	.vidioc_s_fmt_vid_out		= sunxi_isp_s_fmt,
+	.vidioc_g_fmt_vid_out_mplane	= sunxi_isp_g_fmt,
+	.vidioc_try_fmt_vid_out_mplane	= sunxi_isp_try_fmt,
+	.vidioc_s_fmt_vid_out_mplane	= sunxi_isp_s_fmt,
 
 	.vidioc_reqbufs			= v4l2_m2m_ioctl_reqbufs,
 	.vidioc_querybuf		= v4l2_m2m_ioctl_querybuf,
@@ -386,7 +567,7 @@ static int sunxi_isp_m2m_queue_init(void *private, struct vb2_queue *queue_src,
 
 	printk(KERN_ERR "%s: private %x isp_dev %x dev %x src %x dst %x\n", __func__, private, isp_dev, dev, queue_src, queue_dst);
 
-	queue_src->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	queue_src->type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	queue_src->io_modes = VB2_MMAP | VB2_DMABUF;
 	queue_src->drv_priv = isp_ctx;
 	queue_src->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
@@ -401,7 +582,7 @@ static int sunxi_isp_m2m_queue_init(void *private, struct vb2_queue *queue_src,
 	if (ret)
 		return ret;
 
-	queue_dst->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	queue_dst->type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	queue_dst->io_modes = VB2_MMAP | VB2_DMABUF;
 	queue_dst->drv_priv = isp_ctx;
 	queue_dst->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
@@ -462,31 +643,37 @@ static int sunxi_isp_open(struct file *file)
 	isp_ctx = kzalloc(sizeof(*isp_ctx), GFP_KERNEL);
 	if (!isp_ctx) {
 		ret = -ENOMEM;
-		goto complete;
+		goto error;
 	}
 
 	isp_ctx->dev = isp_dev;
 
 	v4l2_fh = &isp_ctx->v4l2_fh;
+	printk(KERN_ERR "%s: isp_dev %x isp_ctx %x v4l2 fh %x\n", __func__, isp_dev, isp_ctx, v4l2_fh);
 	v4l2_fh_init(v4l2_fh, video_dev);
-
-	v4l2_fh->m2m_ctx = v4l2_m2m_ctx_init(m2m_dev, isp_ctx,
-					     &sunxi_isp_m2m_queue_init);
-	if (IS_ERR(v4l2_fh->m2m_ctx)) {
-		ret = PTR_ERR(v4l2_fh->m2m_ctx);
-		goto complete;
-	}
-
 	file->private_data = v4l2_fh;
 	v4l2_fh_add(v4l2_fh);
+
+	printk(KERN_ERR "%s: isp_dev %x m2m_dev\n", __func__, isp_dev, m2m_dev);
+
+	v4l2_fh->m2m_ctx = v4l2_m2m_ctx_init(m2m_dev, isp_ctx,
+					     sunxi_isp_m2m_queue_init);
+	if (IS_ERR(v4l2_fh->m2m_ctx)) {
+		ret = PTR_ERR(v4l2_fh->m2m_ctx);
+		goto error;
+	}
+
+	printk(KERN_ERR "%s: isp_dev %x isp_ctx %x v4l2 fh %x\n", __func__, isp_dev, isp_ctx, v4l2_fh);
 
 	sunxi_isp_context_defaults(isp_ctx);
 
 	ret = 0;
 	goto complete;
 
-complete:
+error:
 	kfree(isp_ctx);
+
+complete:
 	mutex_unlock(file_mutex);
 
 	return ret;
@@ -498,6 +685,8 @@ static int sunxi_isp_release(struct file *file)
 	struct sunxi_isp_device *isp_dev = isp_ctx->dev;
 	struct mutex *file_mutex = &isp_dev->file_mutex;
 	struct v4l2_fh *v4l2_fh = &isp_ctx->v4l2_fh;
+
+	printk(KERN_ERR "%s: isp_dev %x isp_ctx %x v4l2 fh %x\n", __func__, isp_dev, isp_ctx, v4l2_fh);
 
 	mutex_lock(file_mutex);
 
@@ -570,7 +759,7 @@ static int sunxi_isp_v4l2_setup(struct sunxi_isp_device *isp_dev)
 		.lock = file_mutex,
 	};
 */
-	ret = video_register_device(video_dev, VFL_TYPE_VIDEO, 0);
+	ret = video_register_device(video_dev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		v4l2_err(v4l2_dev, "failed to register video device\n");
 		goto error_m2m;
@@ -580,6 +769,8 @@ static int sunxi_isp_v4l2_setup(struct sunxi_isp_device *isp_dev)
 		  video_dev->num);
 
 	isp_dev->video.m2m_dev = m2m_dev;
+
+	printk(KERN_ERR "%s: isp_dev %x m2m_dev\n", __func__, isp_dev, m2m_dev);
 
 	return 0;
 
@@ -617,6 +808,7 @@ static int sunxi_isp_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	void __iomem *io_base;
+	int irq;
 	int ret;
 
 	isp_dev = devm_kzalloc(dev, sizeof(*isp_dev), GFP_KERNEL);
@@ -647,15 +839,54 @@ static int sunxi_isp_probe(struct platform_device *pdev)
 		return PTR_ERR(isp_dev->clk_mod);
 	}
 
+	isp_dev->clk_ram = devm_clk_get(dev, "ram");
+	if (IS_ERR(isp_dev->clk_ram)) {
+		dev_err(dev, "failed to acquire ram clock\n");
+		return PTR_ERR(isp_dev->clk_ram);
+	}
+
+	isp_dev->clk_isp = devm_clk_get(dev, "isp");
+	if (IS_ERR(isp_dev->clk_isp)) {
+		dev_err(dev, "failed to acquire isp clock\n");
+		return PTR_ERR(isp_dev->clk_isp);
+	}
+
+	isp_dev->clk_mipi = devm_clk_get(dev, "mipi");
+	if (IS_ERR(isp_dev->clk_mipi)) {
+		dev_err(dev, "failed to acquire mipi clock\n");
+		return PTR_ERR(isp_dev->clk_mipi);
+	}
+
+	isp_dev->clk_misc = devm_clk_get(dev, "misc");
+	if (IS_ERR(isp_dev->clk_misc)) {
+		dev_err(dev, "failed to acquire mipi clock\n");
+		return PTR_ERR(isp_dev->clk_misc);
+	}
+
 	isp_dev->reset = devm_reset_control_get_shared(dev, NULL);
 	if (IS_ERR(isp_dev->reset)) {
 		dev_err(dev, "failed to get reset controller\n");
 		return PTR_ERR(isp_dev->reset);
 	}
 
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0)
+		return -ENXIO;
+
+	ret = devm_request_irq(dev, irq, sunxi_isp_interrupt, IRQF_SHARED,
+			       SUNXI_ISP_NAME, isp_dev);
+	if (ret) {
+		dev_err(dev, "failed to request interrupt\n");
+		return ret;
+	}
+
 	reset_control_deassert(isp_dev->reset);
 	clk_prepare_enable(isp_dev->clk_bus);
 	clk_prepare_enable(isp_dev->clk_mod);
+	clk_prepare_enable(isp_dev->clk_ram);
+	clk_prepare_enable(isp_dev->clk_isp);
+	clk_prepare_enable(isp_dev->clk_mipi);
+	clk_prepare_enable(isp_dev->clk_misc);
 
 	isp_dev->dev = dev;
 
