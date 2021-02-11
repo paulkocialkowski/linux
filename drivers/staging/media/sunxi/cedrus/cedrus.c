@@ -455,6 +455,7 @@ static int cedrus_probe(struct platform_device *pdev)
 	dev->mdev.ops = &cedrus_m2m_media_ops;
 	dev->v4l2_dev.mdev = &dev->mdev;
 
+	/* 0 -> -1, we don't care about device nr */
 	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
 	if (ret) {
 		v4l2_err(&dev->v4l2_dev, "Failed to register video device\n");
