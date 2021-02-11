@@ -46,6 +46,7 @@
 #ifndef _DT_BINDINGS_CLK_SUN8I_V3S_H_
 #define _DT_BINDINGS_CLK_SUN8I_V3S_H_
 
+#define CLK_PLL_ISP		10
 #define CLK_CPU			14
 
 #define CLK_BUS_CE		20

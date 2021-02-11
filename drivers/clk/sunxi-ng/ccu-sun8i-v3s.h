@@ -23,7 +23,6 @@
 #define CLK_PLL_DDR0		8
 #define CLK_PLL_PERIPH0		9
 #define CLK_PLL_PERIPH0_2X	10
-#define CLK_PLL_ISP		11
 #define CLK_PLL_PERIPH1		12
 /* Reserve one number for not implemented and not used PLL_DDR1 */
 
