@@ -70,6 +70,12 @@ static struct sunxi_sram_desc sun4i_a10_sram_c1 = {
 				  SUNXI_SRAM_MAP(0x7fffffff, 1, "ve")),
 };
 
+static struct sunxi_sram_desc sun4i_a10_sram_c3 = {
+	.data	= SUNXI_SRAM_DATA("C3", 0x4, 24, 1,
+				  SUNXI_SRAM_MAP(1, 0, "cpu"),
+				  SUNXI_SRAM_MAP(0, 1, "isp")),
+};
+
 static struct sunxi_sram_desc sun4i_a10_sram_d = {
 	.data	= SUNXI_SRAM_DATA("D", 0x4, 0x0, 1,
 				  SUNXI_SRAM_MAP(0, 0, "cpu"),
@@ -90,6 +96,10 @@ static const struct of_device_id sunxi_sram_dt_ids[] = {
 	{
 		.compatible	= "allwinner,sun4i-a10-sram-c1",
 		.data		= &sun4i_a10_sram_c1.data,
+	},
+	{
+		.compatible	= "allwinner,sun4i-a10-sram-c3",
+		.data		= &sun4i_a10_sram_c3.data,
 	},
 	{
 		.compatible	= "allwinner,sun4i-a10-sram-d",
@@ -139,9 +149,9 @@ static int sunxi_sram_show(struct seq_file *s, void *data)
 				   sram_data->name);
 
 			val = readl(base + sram_data->reg);
+printk(KERN_ERR "%s: %#x = %#x\n", __func__, base + sram_data->reg, val);
 			val >>= sram_data->offset;
 			val &= GENMASK(sram_data->width - 1, 0);
-
 			for (func = sram_data->func; func->func; func++) {
 				seq_printf(s, "\t\t%s%c\n", func->func,
 					   func->reg_val == val ?
@@ -253,6 +263,12 @@ int sunxi_sram_claim(struct device *dev)
 	val &= ~mask;
 	writel(val | ((device << sram_data->offset) & mask),
 	       base + sram_data->reg);
+
+	printk(KERN_ERR "%s: %#x = %#x\n", __func__, base + sram_data->reg, val | ((device << sram_data->offset) & mask));
+
+	writel(0x7fffffff, base + 0x00);
+	writel(0x00, base + 0x04);
+	writel(0x00, base + 0x08);
 
 	spin_unlock(&sram_lock);
 

@@ -161,24 +161,6 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges;
-		};
-
-		nmi_intc: interrupt-controller@1c000d0 {
-			compatible = "allwinner,sun8i-v3s-nmi",
-				     "allwinner,sun9i-a80-nmi";
-			interrupt-controller;
-			#interrupt-cells = <2>;
-			reg = <0x01c000d0 0x0c>;
-			interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
-		};
-
-		syscon: system-control@1c00000 {
-			compatible = "allwinner,sun8i-v3s-system-control",
-				     "allwinner,sun8i-h3-system-control";
-			reg = <0x01c00000 0x1000>;
-			#address-cells = <1>;
-			#size-cells = <1>;
-			ranges;
 
 			sram_c: sram@1d00000 {
 				compatible = "mmio-sram";
@@ -192,7 +174,22 @@
 						     "allwinner,sun4i-a10-sram-c1";
 					reg = <0x000000 0x80000>;
 				};
+
+				isp_sram: sram-section@3 {
+					compatible = "allwinner,sun8i-v3s-sram-c3",
+						     "allwinner,sun4i-a10-sram-c3";
+					reg = <0x000000 0x80000>;
+				};
 			};
+		};
+
+		nmi_intc: interrupt-controller@1c000d0 {
+			compatible = "allwinner,sun8i-v3s-nmi",
+				     "allwinner,sun9i-a80-nmi";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x01c000d0 0x0c>;
+			interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
 		tcon0: lcd-controller@1c0c000 {
@@ -672,6 +669,7 @@
 				 <&ccu CLK_CSI_MISC>;
 			clock-names = "bus", "mod", "ram", "isp", "mipi", "misc";
 			resets = <&ccu RST_BUS_CSI>;
+			allwinner,sram = <&isp_sram 1>;
 			status = "okay"; // disabled
 		};
 	};
