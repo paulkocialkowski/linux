@@ -243,6 +243,28 @@ struct sunxi_isp_video {
 	struct v4l2_m2m_dev *m2m_dev;
 };
 
+struct sunxi_isp_memory {
+	void *lut_table;
+	dma_addr_t lut_table_dma;
+	unsigned int lut_table_size;
+
+	void *drc_table;
+	dma_addr_t drc_table_dma;
+	unsigned int drc_table_size;
+
+	void *stat;
+	dma_addr_t stat_dma;
+	unsigned int stat_size;
+
+	void *reg_load;
+	dma_addr_t reg_load_dma;
+	unsigned int reg_load_size;
+
+	void *reg_save;
+	dma_addr_t reg_save_dma;
+	unsigned int reg_save_size;
+};
+
 struct sunxi_isp_device {
 	struct device *dev;
 
@@ -257,9 +279,13 @@ struct sunxi_isp_device {
 
 	struct reset_control *reset;
 
+	/* XXX: move under video */
 	struct mutex file_mutex;
 
 	struct sunxi_isp_video video;
+	struct sunxi_isp_memory memory;
+
+	void *io;
 };
 
 struct sunxi_isp_context {

@@ -25,6 +25,8 @@
 
 #include "sunxi_isp.h"
 
+#include "blob/bsp_isp.h"
+
 #define SUNXI_ISP_NAME	"sunxi-isp"
 
 #define sunxi_isp_file_context(f) \
@@ -84,8 +86,53 @@ static const struct sunxi_isp_format sunxi_isp_formats_dst[] = {
 	},
 };
 
-static void *reg_save_addr = NULL;
-static void *reg_load_addr = NULL;
+static void sunxi_isp_write(struct sunxi_isp_device *isp_dev, u32 offset,
+			    u32 value)
+{
+	struct sunxi_isp_memory *memory = &isp_dev->memory;
+	u32 *reg = (u32 *)(memory->reg_load + offset);
+
+	*reg = value;
+}
+
+static int sunxi_isp_memory_setup(struct sunxi_isp_device *isp_dev)
+{
+	struct sunxi_isp_memory *memory = &isp_dev->memory;
+
+	memory->lut_table_size = 0xe00;
+	memory->lut_table =
+		dma_alloc_coherent(isp_dev->dev, memory->lut_table_size,
+				   &memory->lut_table_dma, GFP_KERNEL);
+	memory->lut_table_dma -= 0x40000000;
+
+	memory->drc_table_size = 0x600;
+	memory->drc_table =
+		dma_alloc_coherent(isp_dev->dev, memory->drc_table_size,
+				   &memory->drc_table_dma, GFP_KERNEL);
+	memory->drc_table_dma -= 0x40000000;
+
+	memory->stat_size = 0x2100;
+	memory->stat = dma_alloc_coherent(isp_dev->dev, memory->stat_size,
+					  &memory->stat_dma, GFP_KERNEL);
+	memory->stat_dma -= 0x40000000;
+
+	memory->reg_load_size = 0x1000;
+	memory->reg_load =
+		dma_alloc_coherent(isp_dev->dev, memory->reg_load_size,
+				   &memory->reg_load_dma, GFP_KERNEL);
+	memory->reg_load_dma -= 0x40000000;
+
+	memory->reg_save_size = 0x1000;
+	memory->reg_save =
+		dma_alloc_coherent(isp_dev->dev, memory->reg_save_size,
+				   &memory->reg_save_dma, GFP_KERNEL);
+	memory->reg_save_dma -= 0x40000000;
+
+	printk(KERN_ERR "LUT table %#x, DRC table %#x, stats %#x\n", memory->lut_table_dma, memory->drc_table_dma, memory->stat_dma);
+
+	return 0;
+}
+
 void __iomem *isp_io = NULL;
 
 static irqreturn_t sunxi_isp_interrupt(int irq, void *private)
@@ -106,14 +153,12 @@ static irqreturn_t sunxi_isp_interrupt(int irq, void *private)
 
 	regmap_write(regmap, SUNXI_ISP_FE_INT_STA_REG, status);
 
-	test(isp_dev);
-	dump(reg_save_addr, "SAVE");
-	dump(reg_load_addr, "LOAD");
 /*
-	value = SUNXI_ISP_FE_CTRL_VCAP_EN |
-		SUNXI_ISP_FE_CTRL_OUTPUT_SPEED_CTRL(1);
-	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
+	test(isp_dev);
+	dump(isp_dev->memory.reg_save, "SAVE");
+	dump(isp_dev->memory.reg_load, "LOAD");
 */
+
 	return IRQ_HANDLED;
 }
 
@@ -125,57 +170,32 @@ void sunxi_isp_device_run(void *private)
 {
 	struct sunxi_isp_context *isp_ctx = private;
 	struct sunxi_isp_device *isp_dev = isp_ctx->dev;
+	struct sunxi_isp_memory *memory = &isp_dev->memory;
 	struct regmap *regmap = isp_dev->regmap;
 	struct v4l2_m2m_ctx *m2m_ctx = isp_ctx->v4l2_fh.m2m_ctx;
 	struct vb2_v4l2_buffer *buffer_src, *buffer_dst;
 	/* XXX: luma_src_dma_addr */
 	dma_addr_t dma_addr_luma_src, dma_addr_chroma_src;
 	dma_addr_t dma_addr_luma_dst, dma_addr_chroma_dst;
-	dma_addr_t lut_table_dma_addr, drc_table_dma_addr, stat_dma_addr;
-	dma_addr_t reg_load_dma_addr, reg_save_dma_addr;
-	void *lut_table, *drc_table, *stat, *reg_load, *reg_save;
 	unsigned int steps = 10;
 	u32 value;
-
-	lut_table = dma_alloc_coherent(isp_dev->dev, 0xe00, &lut_table_dma_addr, GFP_KERNEL);
-	drc_table = dma_alloc_coherent(isp_dev->dev, 0x600, &drc_table_dma_addr, GFP_KERNEL);
-	stat = dma_alloc_coherent(isp_dev->dev, 0x2100, &stat_dma_addr, GFP_KERNEL);
-
-	lut_table_dma_addr -= 0x40000000;
-	drc_table_dma_addr -= 0x40000000;
-	stat_dma_addr -= 0x40000000;
-
-	printk(KERN_ERR "LUT table %#x, DRC table %#x, stats %#x\n", lut_table_dma_addr, drc_table_dma_addr, stat_dma_addr);
-
-	reg_load = dma_alloc_coherent(isp_dev->dev, 0x1000, &reg_load_dma_addr, GFP_KERNEL);
-	reg_save = dma_alloc_coherent(isp_dev->dev, 0x1000, &reg_save_dma_addr, GFP_KERNEL);
-
-	reg_save_addr = reg_save;
-	reg_load_addr = reg_load;
-
-	reg_load_dma_addr -= 0x40000000;
-	reg_save_dma_addr -= 0x40000000;
-
-	printk(KERN_ERR "reg load %#x, reg save %#x\n", reg_load_dma_addr, reg_save_dma_addr);
 
 	buffer_src = v4l2_m2m_next_src_buf(m2m_ctx);
 	buffer_dst = v4l2_m2m_next_dst_buf(m2m_ctx);
 
-//	test(isp_dev);
-
 	/* Tables */
 
 	regmap_write(regmap, SUNXI_ISP_REG_LOAD_ADDR_REG,
-		     reg_load_dma_addr >> 2);
+		     memory->reg_load_dma >> 2);
 	regmap_write(regmap, SUNXI_ISP_REG_SAVE_ADDR_REG,
-		     reg_save_dma_addr >> 2);
+		     memory->reg_save_dma >> 2);
 
 	regmap_write(regmap, SUNXI_ISP_LUT_TABLE_ADDR_REG,
-		     lut_table_dma_addr >> 2);
+		     memory->lut_table_dma >> 2);
 	regmap_write(regmap, SUNXI_ISP_DRC_TABLE_ADDR_REG,
-		     drc_table_dma_addr >> 2);
+		     memory->drc_table_dma >> 2);
 	regmap_write(regmap, SUNXI_ISP_STATS_ADDR_REG,
-		     stat_dma_addr >> 2);
+		     memory->stat_dma >> 2);
 
 	/* Module */
 /*
@@ -190,9 +210,8 @@ void sunxi_isp_device_run(void *private)
 		SUNXI_ISP_MODULE_EN_SAP |
 		SUNXI_ISP_MODULE_EN_RGB_DRC;
 */
-	value = SUNXI_ISP_MODULE_EN_SRC0 |
-		SUNXI_ISP_MODULE_EN_AE;
-	regmap_write(regmap, SUNXI_ISP_MODULE_EN_REG, value);
+	value = SUNXI_ISP_MODULE_EN_SRC0;
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MODULE_EN_REG, value);
 //	regmap_write(regmap, SUNXI_ISP_MODULE_EN_REG, SUNXI_ISP_MODULE_EN_SRC0);
 
 
@@ -221,73 +240,74 @@ void sunxi_isp_device_run(void *private)
 
 	value = SUNXI_ISP_AE_SIZE_WIDTH((1280 >> 1) - 1) |
 		SUNXI_ISP_AE_SIZE_HEIGHT((480 >> 1) - 1);
-	regmap_write(regmap, SUNXI_ISP_AE_SIZE_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_AE_SIZE_REG, value);
 
 	value = SUNXI_ISP_AE_POS_HORZ_START(0) |
 		SUNXI_ISP_AE_POS_VERT_START(0);
-	regmap_write(regmap, SUNXI_ISP_AE_POS_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_AE_POS_REG, value);
 
 	/* OB */
 
 	value = SUNXI_ISP_OB_SIZE_WIDTH(1280) |
 		SUNXI_ISP_OB_SIZE_HEIGHT(480);
-	regmap_write(regmap, SUNXI_ISP_OB_SIZE_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_OB_SIZE_REG, value);
 
 	value = SUNXI_ISP_OB_VALID_WIDTH(1280) |
 		SUNXI_ISP_OB_VALID_HEIGHT(480);
-	regmap_write(regmap, SUNXI_ISP_OB_VALID_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_OB_VALID_REG, value);
 
-	regmap_write(regmap, SUNXI_ISP_OB_SRC0_VALID_START_REG, 0);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_OB_SRC0_VALID_START_REG, 0);
 
 	value = SUNXI_ISP_OB_SPRITE_WIDTH(1280) |
 		SUNXI_ISP_OB_SPRITE_HEIGHT(480);
-	regmap_write(regmap, SUNXI_ISP_OB_SPRITE_REG, value);
+	sunxi_isp_write(isp_dev,SUNXI_ISP_OB_SPRITE_REG, value);
 
 	/* Mode */
 
 	/* BGGR */
-	value = SUNXI_ISP_MODE_INPUT_FMT(4) |
+	value = SUNXI_ISP_MODE_INPUT_FMT(0) |
 		SUNXI_ISP_MODE_INPUT_YUV_SEQ(0) |
 		SUNXI_ISP_MODE_SHARP(1) |
 		SUNXI_ISP_MODE_HIST(2);
-	regmap_write(regmap, SUNXI_ISP_MODE_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MODE_REG, value);
 
 	/* SRC0 Input */
 
-	regmap_write(regmap, SUNXI_ISP_IN_CFG_REG,
-		     SUNXI_ISP_IN_CFG_STRIDE_DIV16(1280 / 16));
+	sunxi_isp_write(isp_dev, SUNXI_ISP_IN_CFG_REG,
+			SUNXI_ISP_IN_CFG_STRIDE_DIV16(1280 / 16));
 
-	regmap_write(regmap, SUNXI_ISP_IN_LUMA_RGB_ADDR0_REG,
+	sunxi_isp_write(isp_dev, SUNXI_ISP_IN_LUMA_RGB_ADDR0_REG,
 		     dma_addr_luma_src >> 2);
-/*
+
 	regmap_write(regmap, SUNXI_ISP_IN_CHROMA_ADDR0_REG,
 		     dma_addr_chroma_src >> 2);
-*/
 
 	/* MCH Output */
 
 	value = SUNXI_ISP_MCH_SIZE_CFG_WIDTH(1280) |
 		SUNXI_ISP_MCH_SIZE_CFG_HEIGHT(480);
-	regmap_write(regmap, SUNXI_ISP_MCH_SIZE_CFG_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_SIZE_CFG_REG, value);
 
 	value = SUNXI_ISP_MCH_SCALE_CFG_X_RATIO(1) |
 		SUNXI_ISP_MCH_SCALE_CFG_Y_RATIO(1) |
 		SUNXI_ISP_MCH_SCALE_CFG_WEIGHT_SHIFT(0);
-	regmap_write(regmap, SUNXI_ISP_MCH_SIZE_CFG_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_SCALE_CFG_REG, value);
 
 	/* YUV420 SP mode */
 	value = SUNXI_ISP_MCH_CFG_EN |
 		SUNXI_ISP_MCH_CFG_MODE(0) |
+		SUNXI_ISP_MCH_CFG_MIRROR_EN |
+		SUNXI_ISP_MCH_CFG_FLIP_EN |
 		SUNXI_ISP_MCH_CFG_STRIDE_Y_DIV4(1280/4) |
 		SUNXI_ISP_MCH_CFG_STRIDE_UV_DIV4(1280/4);
-	regmap_write(regmap, SUNXI_ISP_MCH_CFG_REG, value);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_CFG_REG, value);
 
-	regmap_write(regmap, SUNXI_ISP_MCH_Y_ADDR0_REG, dma_addr_luma_dst >> 2);
-	regmap_write(regmap, SUNXI_ISP_MCH_U_ADDR0_REG, dma_addr_chroma_dst >> 2);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_Y_ADDR0_REG, dma_addr_luma_dst >> 2);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_U_ADDR0_REG, dma_addr_chroma_dst >> 2);
 
 	/* SCH Output */
 
-	regmap_write(regmap, SUNXI_ISP_MCH_CFG_REG, 0);
+	sunxi_isp_write(isp_dev, SUNXI_ISP_SCH_CFG_REG, 0);
 
 	/* Frontend Config */
 
@@ -296,9 +316,15 @@ void sunxi_isp_device_run(void *private)
 
 	regmap_write(regmap, SUNXI_ISP_FE_CFG_REG, value);
 
+	/* Para Ready */
+
+	regmap_read(regmap, SUNXI_ISP_FE_CTRL_REG, &value);
+	value |= SUNXI_ISP_FE_CTRL_PARA_READY;
+	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
+
 	/* SRAM Clear */
 
-	regmap_write(regmap, SUNXI_ISP_SRAM_RW_OFFSET_REG, BIT(31));
+//	regmap_write(regmap, SUNXI_ISP_SRAM_RW_OFFSET_REG, BIT(31));
 
 	/* Interrupt */
 
@@ -314,19 +340,26 @@ void sunxi_isp_device_run(void *private)
 
 //	regmap_write(regmap, SUNXI_ISP_FE_ROT_OF_CFG_REG, 0x10);
 
-	test(isp_dev);
+//	test(isp_dev);
 
-	memcpy(reg_load, isp_io, 0x240);
+//	memcpy(reg_load, isp_io, 0x240);
 //	memcpy(reg_save, isp_io, 0x240);
 
 
 	/* Frontend Control */
 
-	value = SUNXI_ISP_FE_CTRL_VCAP_EN |
-		SUNXI_ISP_FE_CTRL_PARA_READY |
-		SUNXI_ISP_FE_CTRL_OUTPUT_SPEED_CTRL(1);
-	*((u32 *) reg_load + SUNXI_ISP_FE_CTRL_REG) = value;
+	regmap_read(regmap, SUNXI_ISP_FE_CTRL_REG, &value);
+	value |= SUNXI_ISP_FE_CTRL_SCAP_EN;
+	value |= SUNXI_ISP_FE_CTRL_OUTPUT_SPEED_CTRL(1);
 	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
+
+/*
+	value = SUNXI_ISP_FE_CTRL_VCAP_EN |
+		SUNXI_ISP_FE_CTRL_OUTPUT_SPEED_CTRL(1);
+//	*((u32 *) reg_load + SUNXI_ISP_FE_CTRL_REG) = value;
+	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
+*/
+
 /*
 	while (steps--) {
 		u32 status = 0;
@@ -339,8 +372,119 @@ void sunxi_isp_device_run(void *private)
 */
 }
 
+void sunxi_isp_device_run_blob(void *private)
+{
+	struct sunxi_isp_context *isp_ctx = private;
+	struct sunxi_isp_device *isp_dev = isp_ctx->dev;
+	struct sunxi_isp_memory *memory = &isp_dev->memory;
+	struct regmap *regmap = isp_dev->regmap;
+	struct v4l2_m2m_ctx *m2m_ctx = isp_ctx->v4l2_fh.m2m_ctx;
+	struct vb2_v4l2_buffer *buffer_src, *buffer_dst;
+	dma_addr_t dma_addr_luma_src, dma_addr_chroma_src;
+	dma_addr_t dma_addr_luma_dst, dma_addr_chroma_dst;
+	enum pixel_fmt isp_fmt[ISP_MAX_CH_NUM] = { 0 };
+	struct isp_size isp_size[ISP_MAX_CH_NUM] = { 0 };
+	struct isp_size_settings size_settings = { 0 };
+	struct isp_size ob_black_size = { 0 };
+	struct isp_size ob_valid_size = { 0 };
+	struct coor ob_start = { 0 };
+	struct isp_init_para isp_init_para = { 0 };
+	unsigned int size;
+	u32 value;
+
+	buffer_src = v4l2_m2m_next_src_buf(m2m_ctx);
+	buffer_dst = v4l2_m2m_next_dst_buf(m2m_ctx);
+
+	dma_addr_luma_src =
+		vb2_dma_contig_plane_dma_addr(&buffer_src->vb2_buf, 0);
+	dma_addr_chroma_src =
+		vb2_dma_contig_plane_dma_addr(&buffer_src->vb2_buf, 1);
+
+	dma_addr_luma_dst =
+		vb2_dma_contig_plane_dma_addr(&buffer_dst->vb2_buf, 0);
+	dma_addr_chroma_dst =
+		vb2_dma_contig_plane_dma_addr(&buffer_dst->vb2_buf, 1);
+
+	dma_addr_luma_src -= 0x40000000;
+	dma_addr_chroma_src -= 0x40000000;
+	dma_addr_luma_dst -= 0x40000000;
+	dma_addr_chroma_dst -= 0x40000000;
+
+	bsp_isp_init_platform(ISP_PLATFORM_SUN8IW8P1);
+	bsp_isp_set_base_addr((unsigned int)isp_io);
+	bsp_isp_set_map_load_addr((unsigned int)memory->reg_load);
+	bsp_isp_set_map_saved_addr((unsigned int)memory->reg_save);
+
+	bsp_isp_set_dma_load_addr((unsigned int)memory->reg_load_dma);
+	bsp_isp_set_dma_saved_addr((unsigned int)memory->reg_load_dma);
+
+	isp_fmt[MAIN_CH] = PIX_FMT_YUV420SP_8;
+	isp_fmt[SUB_CH] = PIX_FMT_NONE;
+	isp_fmt[ROT_CH] = PIX_FMT_NONE;
+
+	bsp_isp_set_fmt(BUS_FMT_SBGGR, isp_fmt);
+
+	bsp_isp_set_rot(MAIN_CH,ANGLE_0);
+
+	isp_size[MAIN_CH].width = 1280;
+	isp_size[MAIN_CH].height = 480;
+
+	isp_size[SUB_CH].width = 0;
+	isp_size[SUB_CH].height = 0;
+
+	isp_size[ROT_CH].width = 0;
+	isp_size[ROT_CH].height = 0;
+
+	ob_black_size.width = 1280;
+	ob_black_size.height = 480;
+	ob_valid_size.width = 1280;
+	ob_valid_size.height = 480;
+	ob_start.hor = 0;
+	ob_start.ver = 0;
+
+	size_settings.full_size = isp_size[MAIN_CH];
+	size_settings.scale_size = isp_size[SUB_CH];
+	size_settings.ob_black_size = ob_black_size;
+	size_settings.ob_start = ob_start;
+	size_settings.ob_valid_size = ob_valid_size;
+	size_settings.ob_rot_size = isp_size[ROT_CH];
+
+	size = bsp_isp_set_size(isp_fmt, &size_settings);
+	printk(KERN_ERR "bsp_isp_set_size gives %u\n", size);
+
+	bsp_isp_enable();
+
+	isp_init_para.isp_src_ch_mode = ISP_SINGLE_CH;
+	isp_init_para.isp_src_ch_en[0] = 1;
+
+	bsp_isp_init(&isp_init_para);
+
+	bsp_isp_set_output_addr(dma_addr_luma_dst);
+
+	bsp_isp_set_statistics_addr(memory->stat_dma);
+	bsp_isp_set_para_ready();
+	bsp_isp_clr_irq_status(ISP_IRQ_EN_ALL);
+	bsp_isp_irq_enable(START_INT_EN | FINISH_INT_EN | SRC0_FIFO_INT_EN);
+
+	sunxi_isp_write(isp_dev, SUNXI_ISP_IN_CFG_REG,
+			SUNXI_ISP_IN_CFG_STRIDE_DIV16(1280 / 16));
+	regmap_write(regmap, SUNXI_ISP_IN_CFG_REG,
+			SUNXI_ISP_IN_CFG_STRIDE_DIV16(1280 / 16));
+
+	value = SUNXI_ISP_FE_CFG_EN |
+		SUNXI_ISP_FE_CFG_SRC0_MODE(SUNXI_ISP_SRC_MODE_DRAM);
+	regmap_write(regmap, SUNXI_ISP_FE_CFG_REG, value);
+
+	test(isp_dev);
+	dump(memory->reg_load, "LOAD");
+
+	bsp_isp_image_capture_start();
+	//bsp_isp_video_capture_start();
+}
+
 static const struct v4l2_m2m_ops sunxi_isp_m2m_ops = {
-	.device_run	= sunxi_isp_device_run,
+//	.device_run	= sunxi_isp_device_run,
+	.device_run	= sunxi_isp_device_run_blob,
 };
 
 static int sunxi_isp_querycap(struct file *file, void *private,
@@ -774,6 +918,7 @@ static const struct v4l2_file_operations sunxi_isp_file_ops = {
 	.mmap		= v4l2_m2m_fop_mmap,
 };
 
+/* XXX: rename video_setup */
 static int sunxi_isp_v4l2_setup(struct sunxi_isp_device *isp_dev)
 {
 	struct video_device *video_dev = &isp_dev->video.video_dev;
@@ -965,6 +1110,12 @@ static int sunxi_isp_probe(struct platform_device *pdev)
 	ret = sunxi_isp_v4l2_setup(isp_dev);
 	if (ret) {
 		dev_err(dev, "failed to setup V4L2\n");
+		return ret;
+	}
+
+	ret = sunxi_isp_memory_setup(isp_dev);
+	if (ret) {
+		dev_err(dev, "failed to setup memory\n");
 		return ret;
 	}
 
