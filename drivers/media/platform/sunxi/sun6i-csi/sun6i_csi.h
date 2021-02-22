@@ -13,6 +13,7 @@
 #include <media/v4l2-fwnode.h>
 
 #include "sun6i_video.h"
+#include "sunxi_isp.h"
 
 struct sun6i_csi;
 
@@ -32,6 +33,35 @@ struct sun6i_csi_config {
 	u32		height;
 };
 
+/*
+struct sunxi_isp_memory {
+	void *lut_table;
+	dma_addr_t lut_table_dma;
+	unsigned int lut_table_size;
+
+	void *drc_table;
+	dma_addr_t drc_table_dma;
+	unsigned int drc_table_size;
+
+	void *stat;
+	dma_addr_t stat_dma;
+	unsigned int stat_size;
+
+	void *reg_load;
+	dma_addr_t reg_load_dma;
+	unsigned int reg_load_size;
+
+	void *reg_save;
+	dma_addr_t reg_save_dma;
+	unsigned int reg_save_size;
+};
+
+struct sunxi_isp_device {
+	void *io;
+	struct device			*dev;
+	struct sunxi_isp_memory memory;
+};
+*/
 struct sun6i_csi {
 	struct device			*dev;
 	struct v4l2_ctrl_handler	ctrl_handler;
@@ -44,6 +74,8 @@ struct sun6i_csi {
 	struct sun6i_csi_config		config;
 
 	struct sun6i_video		video;
+
+	struct sunxi_isp_device isp;
 };
 
 /**

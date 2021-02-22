@@ -34,6 +34,7 @@ struct sun6i_csi_dev {
 	struct device			*dev;
 
 	struct regmap			*regmap;
+	struct clk			*clk_bus;
 	struct clk			*clk_mod;
 	struct clk			*clk_ram;
 	struct reset_control		*rstc_bus;
@@ -89,6 +90,9 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
 		}
 		return false;
 	}
+
+	// XXX: decorrelate
+	return true;
 
 	switch (pixformat) {
 	case V4L2_PIX_FMT_SBGGR8:
@@ -172,15 +176,18 @@ int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable)
 	if (!enable) {
 		regmap_update_bits(regmap, CSI_EN_REG, CSI_EN_CSI_EN, 0);
 
+/*
 		clk_disable_unprepare(sdev->clk_ram);
 		if (of_device_is_compatible(dev->of_node,
 					    "allwinner,sun50i-a64-csi"))
 			clk_rate_exclusive_put(sdev->clk_mod);
 		clk_disable_unprepare(sdev->clk_mod);
-		reset_control_assert(sdev->rstc_bus);
+	//	reset_control_assert(sdev->rstc_bus);
+*/
 		return 0;
 	}
 
+/*
 	ret = clk_prepare_enable(sdev->clk_mod);
 	if (ret) {
 		dev_err(sdev->dev, "Enable csi clk err %d\n", ret);
@@ -201,6 +208,7 @@ int sun6i_csi_set_power(struct sun6i_csi *csi, bool enable)
 		dev_err(sdev->dev, "reset err %d\n", ret);
 		goto clk_ram_disable;
 	}
+*/
 
 	regmap_update_bits(regmap, CSI_EN_REG, CSI_EN_CSI_EN, CSI_EN_CSI_EN);
 
@@ -539,7 +547,7 @@ static void sun6i_csi_set_window(struct sun6i_csi_dev *sdev)
 	planar_offset[0] = 0;
 	switch (config->pixelformat) {
 	case V4L2_PIX_FMT_HM12:
-	case V4L2_PIX_FMT_NV12:
+//	case V4L2_PIX_FMT_NV12:
 	case V4L2_PIX_FMT_NV21:
 	case V4L2_PIX_FMT_NV16:
 	case V4L2_PIX_FMT_NV61:
@@ -564,6 +572,7 @@ static void sun6i_csi_set_window(struct sun6i_csi_dev *sdev)
 				bytesperline_c * height;
 		break;
 	default: /* raw */
+		printk(KERN_ERR "%s: using raw bytesperline\n", __func__);
 		dev_dbg(sdev->dev,
 			"Calculating pixelformat(0x%x)'s bytesperline as a packed format\n",
 			config->pixelformat);
@@ -630,6 +639,7 @@ void sun6i_csi_set_stream(struct sun6i_csi *csi, bool enable)
 		     CSI_CH_INT_EN_FIFO0_OF_INT_EN |
 		     CSI_CH_INT_EN_FD_INT_EN |
 		     CSI_CH_INT_EN_CD_INT_EN);
+//		     CSI_CH_INT_EN_VS_INT_EN);
 
 	regmap_update_bits(regmap, CSI_CAP_REG, CSI_CAP_CH0_VCAP_ON,
 			   CSI_CAP_CH0_VCAP_ON);
@@ -892,13 +902,21 @@ clean_media:
 /* -----------------------------------------------------------------------------
  * Resources and IRQ
  */
+
+irqreturn_t sunxi_isp_isr(struct sunxi_isp_device *isp_dev);
+
 static irqreturn_t sun6i_csi_isr(int irq, void *dev_id)
 {
 	struct sun6i_csi_dev *sdev = (struct sun6i_csi_dev *)dev_id;
 	struct regmap *regmap = sdev->regmap;
 	u32 status;
+	irqreturn_t ret;
 
 	printk(KERN_ERR "%s()\n", __func__);
+
+	ret = sunxi_isp_isr(&sdev->csi.isp);
+	if (ret == IRQ_HANDLED)
+		return ret;
 
 	regmap_read(regmap, CSI_CH_INT_STA_REG, &status);
 
@@ -924,6 +942,8 @@ static irqreturn_t sun6i_csi_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+int sunxi_isp_memory_setup(struct sunxi_isp_device *isp_dev);
+
 static const struct regmap_config sun6i_csi_regmap_config = {
 	.reg_bits       = 32,
 	.reg_stride     = 4,
@@ -931,9 +951,16 @@ static const struct regmap_config sun6i_csi_regmap_config = {
 	.max_register	= 0x9c,
 };
 
+static const struct regmap_config sunxi_isp_regmap_config = {
+	.reg_bits       = 32,
+	.reg_stride     = 4,
+	.val_bits       = 32,
+	.max_register	= 0x400,
+};
 static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 				      struct platform_device *pdev)
 {
+	struct sunxi_isp_device *isp_dev = &sdev->csi.isp;
 	struct resource *res;
 	void __iomem *io_base;
 	int ret;
@@ -944,11 +971,33 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 	if (IS_ERR(io_base))
 		return PTR_ERR(io_base);
 
-	sdev->regmap = devm_regmap_init_mmio_clk(&pdev->dev, "bus", io_base,
+	sdev->regmap = devm_regmap_init_mmio(&pdev->dev, io_base,
 						 &sun6i_csi_regmap_config);
 	if (IS_ERR(sdev->regmap)) {
 		dev_err(&pdev->dev, "Failed to init register map\n");
 		return PTR_ERR(sdev->regmap);
+	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	io_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(io_base))
+		return PTR_ERR(io_base);
+
+	isp_dev->regmap = devm_regmap_init_mmio(&pdev->dev, io_base,
+						&sunxi_isp_regmap_config);
+	if (IS_ERR(isp_dev->regmap)) {
+		dev_err(&pdev->dev, "Failed to init register map\n");
+		return PTR_ERR(isp_dev->regmap);
+	}
+
+	isp_dev->io = io_base;
+
+	printk(KERN_ERR "ISP base is %#x\n", isp_dev->io);
+
+	sdev->clk_bus = devm_clk_get(&pdev->dev, "bus");
+	if (IS_ERR(sdev->clk_bus)) {
+		dev_err(&pdev->dev, "Unable to acquire csi clock\n");
+		return PTR_ERR(sdev->clk_bus);
 	}
 
 	sdev->clk_mod = devm_clk_get(&pdev->dev, "mod");
@@ -979,6 +1028,14 @@ static int sun6i_csi_resource_request(struct sun6i_csi_dev *sdev,
 		dev_err(&pdev->dev, "Cannot request csi IRQ\n");
 		return ret;
 	}
+
+	reset_control_deassert(sdev->rstc_bus);
+	clk_prepare_enable(sdev->clk_bus);
+	clk_prepare_enable(sdev->clk_mod);
+	clk_prepare_enable(sdev->clk_ram);
+
+	sdev->csi.isp.dev = &pdev->dev;
+	sunxi_isp_memory_setup(&sdev->csi.isp);
 
 	return 0;
 }

@@ -507,6 +507,8 @@ static int sun6i_mipi_csi2_probe(struct platform_device *pdev)
 	void __iomem *io_base;
 	int ret;
 
+	printk(KERN_ERR "%s: in there\n", __func__);
+
 	cdev = devm_kzalloc(&pdev->dev, sizeof(*cdev), GFP_KERNEL);
 	if (!cdev)
 		return -ENOMEM;
@@ -560,6 +562,8 @@ static int sun6i_mipi_csi2_probe(struct platform_device *pdev)
 	ret = sun6i_mipi_csi2_v4l2_setup(cdev);
 	if (ret)
 		return ret;
+
+	printk(KERN_ERR "%s: all good\n", __func__);
 
 	return 0;
 }

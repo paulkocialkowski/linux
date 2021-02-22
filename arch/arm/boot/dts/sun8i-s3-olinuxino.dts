@@ -91,11 +91,13 @@
 	status = "okay";
 };
 
+/*
 &csi1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&csi1_8bit_pins>;
 	status = "okay";
 };
+*/
 
 &dphy {
 	status = "okay";
@@ -121,7 +123,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_pe_pins>;
 	status = "okay";
-
+/*
 	ov2640: camera@30 {
 		compatible = "ovti,ov2640";
 		reg = <0x30>;
@@ -135,6 +137,7 @@
 		clock-names = "xvclk";
 		status = "okay";
 	};
+*/
 
 	imx219: camera@10 {
 		compatible = "sony,imx219";

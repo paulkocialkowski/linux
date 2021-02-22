@@ -113,6 +113,9 @@ static int sun6i_video_buffer_prepare(struct vb2_buffer *vb)
 	return 0;
 }
 
+void sunxi_isp_run(struct sunxi_isp_device *isp_dev, dma_addr_t addr);
+void sunxi_isp_run_blob(struct sunxi_isp_device *isp_dev, dma_addr_t addr);
+
 static int sun6i_video_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct sun6i_video *video = vb2_get_drv_priv(vq);
@@ -153,8 +156,10 @@ static int sun6i_video_start_streaming(struct vb2_queue *vq, unsigned int count)
 	buf = list_first_entry(&video->dma_queue,
 			       struct sun6i_csi_buffer, list);
 	buf->queued_to_csi = true;
-	sun6i_csi_update_buf_addr(video->csi, buf->dma_addr);
+//	sun6i_csi_update_buf_addr(video->csi, buf->dma_addr);
 
+	sunxi_isp_run(&video->csi->isp, buf->dma_addr);
+//	sunxi_isp_run_blob(&video->csi->isp, buf->dma_addr);
 	sun6i_csi_set_stream(video->csi, true);
 
 	/*
@@ -176,7 +181,8 @@ static int sun6i_video_start_streaming(struct vb2_queue *vq, unsigned int count)
 	 */
 	next_buf = list_next_entry(buf, list);
 	next_buf->queued_to_csi = true;
-	sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
+
+//	sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
 
 	spin_unlock_irqrestore(&video->dma_queue_lock, flags);
 
@@ -264,7 +270,7 @@ void sun6i_video_frame_done(struct sun6i_video *video)
 	 */
 	if (!next_buf->queued_to_csi) {
 		next_buf->queued_to_csi = true;
-		sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
+//		sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
 		dev_dbg(video->csi->dev, "Frame dropped!\n");
 		goto unlock;
 	}
@@ -279,7 +285,7 @@ void sun6i_video_frame_done(struct sun6i_video *video)
 	if (!list_is_last(&next_buf->list, &video->dma_queue)) {
 		next_buf = list_next_entry(next_buf, list);
 		next_buf->queued_to_csi = true;
-		sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
+//		sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
 	} else {
 		dev_dbg(video->csi->dev, "Next frame will be dropped!\n");
 	}

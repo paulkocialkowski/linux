@@ -416,7 +416,7 @@ void sunxi_isp_device_run_blob(void *private)
 	bsp_isp_set_map_saved_addr((unsigned int)memory->reg_save);
 
 	bsp_isp_set_dma_load_addr((unsigned int)memory->reg_load_dma);
-	bsp_isp_set_dma_saved_addr((unsigned int)memory->reg_load_dma);
+	bsp_isp_set_dma_saved_addr((unsigned int)memory->reg_save_dma);
 
 	isp_fmt[MAIN_CH] = PIX_FMT_YUV420SP_8;
 	isp_fmt[SUB_CH] = PIX_FMT_NONE;
