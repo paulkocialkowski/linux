@@ -25,6 +25,8 @@
 
 #include "sunxi_isp.h"
 
+#include "blob/bsp_isp.h"
+
 #define SUNXI_ISP_NAME	"sunxi-isp"
 
 #define sunxi_isp_file_context(f) \
@@ -164,7 +166,7 @@ static irqreturn_t sunxi_isp_interrupt(int irq, void *private)
 #define ISP_STAT_TOTAL_SIZE         0x2100
 #define ISP_DRC_DISC_MEM_SIZE            0x0600
 
-void sunxi_isp_device_run(void *private)
+void sunxi_isp_device_run_blob(void *private)
 {
 	struct sunxi_isp_context *isp_ctx = private;
 	struct sunxi_isp_device *isp_dev = isp_ctx->dev;
@@ -172,38 +174,20 @@ void sunxi_isp_device_run(void *private)
 	struct regmap *regmap = isp_dev->regmap;
 	struct v4l2_m2m_ctx *m2m_ctx = isp_ctx->v4l2_fh.m2m_ctx;
 	struct vb2_v4l2_buffer *buffer_src, *buffer_dst;
-	/* XXX: luma_src_dma_addr */
 	dma_addr_t dma_addr_luma_src, dma_addr_chroma_src;
 	dma_addr_t dma_addr_luma_dst, dma_addr_chroma_dst;
-	unsigned int width, height;
+	enum pixel_fmt isp_fmt[ISP_MAX_CH_NUM] = { 0 };
+	struct isp_size isp_size[ISP_MAX_CH_NUM] = { 0 };
+	struct isp_size_settings size_settings = { 0 };
+	struct isp_size ob_black_size = { 0 };
+	struct isp_size ob_valid_size = { 0 };
+	struct coor ob_start = { 0 };
+	struct isp_init_para isp_init_para = { 0 };
+	unsigned int size;
 	u32 value;
-
-	width = 1280;
-	height = 480;
 
 	buffer_src = v4l2_m2m_next_src_buf(m2m_ctx);
 	buffer_dst = v4l2_m2m_next_dst_buf(m2m_ctx);
-
-	memcpy(memory->reg_load, isp_io, 0x240);
-
-	/* Tables */
-
-	regmap_write(regmap, SUNXI_ISP_REG_LOAD_ADDR_REG,
-		     memory->reg_load_dma >> 2);
-	regmap_write(regmap, SUNXI_ISP_REG_SAVE_ADDR_REG,
-		     memory->reg_save_dma >> 2);
-
-	regmap_write(regmap, SUNXI_ISP_LUT_TABLE_ADDR_REG,
-		     memory->lut_table_dma >> 2);
-	regmap_write(regmap, SUNXI_ISP_DRC_TABLE_ADDR_REG,
-		     memory->drc_table_dma >> 2);
-	regmap_write(regmap, SUNXI_ISP_STATS_ADDR_REG,
-		     memory->stat_dma >> 2);
-
-	/* Module */
-
-	value = SUNXI_ISP_MODULE_EN_SRC0;
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MODULE_EN_REG, value);
 
 	dma_addr_luma_src =
 		vb2_dma_contig_plane_dma_addr(&buffer_src->vb2_buf, 0);
@@ -220,121 +204,78 @@ void sunxi_isp_device_run(void *private)
 	dma_addr_luma_dst -= 0x40000000;
 	dma_addr_chroma_dst -= 0x40000000;
 
-	printk(KERN_ERR "%s: src %#x/%#x -> dst %#x/%#x\n", __func__,
-	       dma_addr_luma_src, dma_addr_chroma_src, dma_addr_luma_dst,
-	       dma_addr_chroma_dst);
+	bsp_isp_init_platform(ISP_PLATFORM_SUN8IW8P1);
+	bsp_isp_set_base_addr((unsigned int)isp_io);
+	bsp_isp_set_map_load_addr((unsigned int)memory->reg_load);
+	bsp_isp_set_map_saved_addr((unsigned int)memory->reg_save);
 
-	/* AE */
+	bsp_isp_set_dma_load_addr((unsigned int)memory->reg_load_dma);
+	bsp_isp_set_dma_saved_addr((unsigned int)memory->reg_save_dma);
 
-	value = SUNXI_ISP_AE_SIZE_WIDTH((width >> 1) - 1) |
-		SUNXI_ISP_AE_SIZE_HEIGHT((height >> 1) - 1);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_AE_SIZE_REG, value);
+	isp_fmt[MAIN_CH] = PIX_FMT_YUV420SP_8;
+	isp_fmt[SUB_CH] = PIX_FMT_NONE;
+	isp_fmt[ROT_CH] = PIX_FMT_NONE;
 
-	value = SUNXI_ISP_AE_POS_HORZ_START(0) |
-		SUNXI_ISP_AE_POS_VERT_START(0);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_AE_POS_REG, value);
+	bsp_isp_set_fmt(BUS_FMT_SBGGR, isp_fmt);
 
-	/* OB */
+	bsp_isp_set_rot(MAIN_CH,ANGLE_0);
 
-	value = SUNXI_ISP_OB_SIZE_WIDTH(width) |
-		SUNXI_ISP_OB_SIZE_HEIGHT(height);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_OB_SIZE_REG, value);
+	isp_size[MAIN_CH].width = 1280;
+	isp_size[MAIN_CH].height = 480;
 
-	value = SUNXI_ISP_OB_VALID_WIDTH(width) |
-		SUNXI_ISP_OB_VALID_HEIGHT(height);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_OB_VALID_REG, value);
+	isp_size[SUB_CH].width = 0;
+	isp_size[SUB_CH].height = 0;
 
-	sunxi_isp_write(isp_dev, SUNXI_ISP_OB_SRC0_VALID_START_REG, 0);
+	isp_size[ROT_CH].width = 0;
+	isp_size[ROT_CH].height = 0;
 
-	value = SUNXI_ISP_OB_SPRITE_WIDTH(width) |
-		SUNXI_ISP_OB_SPRITE_HEIGHT(height);
-	sunxi_isp_write(isp_dev,SUNXI_ISP_OB_SPRITE_REG, value);
+	ob_black_size.width = 1280;
+	ob_black_size.height = 480;
+	ob_valid_size.width = 1280;
+	ob_valid_size.height = 480;
+	ob_start.hor = 0;
+	ob_start.ver = 0;
 
-	/* Bayer offset/gain */
+	size_settings.full_size = isp_size[MAIN_CH];
+	size_settings.scale_size = isp_size[SUB_CH];
+	size_settings.ob_black_size = ob_black_size;
+	size_settings.ob_start = ob_start;
+	size_settings.ob_valid_size = ob_valid_size;
+	size_settings.ob_rot_size = isp_size[ROT_CH];
 
-	sunxi_isp_write(isp_dev, 0xe0, 0x200020);
-	sunxi_isp_write(isp_dev, 0xe4, 0x200020);
-	sunxi_isp_write(isp_dev, 0xe8, 0x1000100);
-	sunxi_isp_write(isp_dev, 0xec, 0x100);
+	size = bsp_isp_set_size(isp_fmt, &size_settings);
+	printk(KERN_ERR "bsp_isp_set_size gives %u\n", size);
 
-	/* Mode */
+	bsp_isp_enable();
 
-	value = SUNXI_ISP_MODE_INPUT_FMT(SUNXI_ISP_INPUT_FMT_RAW_BGGR) |
-		SUNXI_ISP_MODE_INPUT_YUV_SEQ(0) |
-		SUNXI_ISP_MODE_SHARP(1) |
-		SUNXI_ISP_MODE_HIST(2);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MODE_REG, value);
+	isp_init_para.isp_src_ch_mode = ISP_SINGLE_CH;
+	isp_init_para.isp_src_ch_en[0] = 1;
 
-	/* SRC0 Input */
+	bsp_isp_init(&isp_init_para);
+
+	bsp_isp_set_output_addr(dma_addr_luma_dst);
+
+	bsp_isp_set_statistics_addr(memory->stat_dma);
+	bsp_isp_set_para_ready();
+	bsp_isp_clr_irq_status(ISP_IRQ_EN_ALL);
+	bsp_isp_irq_enable(START_INT_EN | FINISH_INT_EN | SRC0_FIFO_INT_EN);
 
 	sunxi_isp_write(isp_dev, SUNXI_ISP_IN_CFG_REG,
-			SUNXI_ISP_IN_CFG_STRIDE_DIV16(width / 16));
-
-	sunxi_isp_write(isp_dev, SUNXI_ISP_IN_LUMA_RGB_ADDR0_REG,
-		     dma_addr_luma_src >> 2);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_IN_CHROMA_ADDR0_REG,
-		     dma_addr_chroma_src >> 2);
-
-	/* MCH Output */
-
-	value = SUNXI_ISP_MCH_SIZE_CFG_WIDTH(width) |
-		SUNXI_ISP_MCH_SIZE_CFG_HEIGHT(height);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_SIZE_CFG_REG, value);
-
-	value = SUNXI_ISP_MCH_SCALE_CFG_X_RATIO(1) |
-		SUNXI_ISP_MCH_SCALE_CFG_Y_RATIO(1) |
-		SUNXI_ISP_MCH_SCALE_CFG_WEIGHT_SHIFT(0);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_SCALE_CFG_REG, value);
-
-	/* YUV420 SP mode */
-	value = SUNXI_ISP_MCH_CFG_EN |
-		SUNXI_ISP_MCH_CFG_MODE(0) |
-		SUNXI_ISP_MCH_CFG_STRIDE_Y_DIV4(width/4) |
-		SUNXI_ISP_MCH_CFG_STRIDE_UV_DIV4(width/4);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_CFG_REG, value);
-
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_Y_ADDR0_REG, dma_addr_luma_dst >> 2);
-	sunxi_isp_write(isp_dev, SUNXI_ISP_MCH_U_ADDR0_REG, dma_addr_chroma_dst >> 2);
-
-	/* Frontend Config */
+			SUNXI_ISP_IN_CFG_STRIDE_DIV16(1280 / 16));
 
 	value = SUNXI_ISP_FE_CFG_EN |
 		SUNXI_ISP_FE_CFG_SRC0_MODE(SUNXI_ISP_SRC_MODE_DRAM);
 	regmap_write(regmap, SUNXI_ISP_FE_CFG_REG, value);
 
-	/* Para Ready */
+	test(isp_dev);
+	dump(memory->reg_load, "LOAD");
 
-	regmap_read(regmap, SUNXI_ISP_FE_CTRL_REG, &value);
-	value |= SUNXI_ISP_FE_CTRL_PARA_READY;
-	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
-
-	/* SRAM Clear */
-
-//	regmap_write(regmap, SUNXI_ISP_SRAM_RW_OFFSET_REG, BIT(31));
-
-	/* Interrupt */
-
-	regmap_write(regmap, SUNXI_ISP_FE_INT_LINE_NUM_REG, 4);
-
-	regmap_write(regmap, SUNXI_ISP_FE_INT_STA_REG, 0xff);
-	regmap_write(regmap, SUNXI_ISP_FE_INT_EN_REG, 0xff);
-/*
-		     SUNXI_ISP_FE_INT_EN_FINISH |
-		     SUNXI_ISP_FE_INT_EN_START |
-		     SUNXI_ISP_FE_INT_EN_SRC0_FIFO);
-*/
-
-//	regmap_write(regmap, SUNXI_ISP_FE_ROT_OF_CFG_REG, 0x10);
-
-	/* Frontend Control */
-
-	regmap_read(regmap, SUNXI_ISP_FE_CTRL_REG, &value);
-	value |= SUNXI_ISP_FE_CTRL_VCAP_EN;
-	regmap_write(regmap, SUNXI_ISP_FE_CTRL_REG, value);
+	bsp_isp_image_capture_start();
+	//bsp_isp_video_capture_start();
 }
 
 static const struct v4l2_m2m_ops sunxi_isp_m2m_ops = {
-	.device_run	= sunxi_isp_device_run,
+	.device_run	= sunxi_isp_device_run_blob,
 };
 
 static int sunxi_isp_querycap(struct file *file, void *private,

@@ -104,7 +104,8 @@ void sunxi_isp_run(struct sunxi_isp_device *isp_dev, dma_addr_t addr)
 
 	/* XXX: looks like that did it! */
 	/* find out exactly what */
-	memcpy(memory->reg_load, isp_dev->io, 0x240);
+//	memcpy(memory->reg_load, isp_dev->io, 0x240);
+	memcpy(memory->reg_load, isp_dev->io, 0x160);
 
 	/* Tables */
 
@@ -230,7 +231,6 @@ void sunxi_isp_run(struct sunxi_isp_device *isp_dev, dma_addr_t addr)
 
 	value = SUNXI_ISP_FE_CFG_EN |
 		SUNXI_ISP_FE_CFG_SRC0_MODE(SUNXI_ISP_SRC_MODE_CSI(0));
-
 	regmap_write(regmap, SUNXI_ISP_FE_CFG_REG, value);
 
 	/* Para Ready */
