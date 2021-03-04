@@ -164,6 +164,19 @@ static irqreturn_t sunxi_isp_interrupt(int irq, void *private)
 #define ISP_STAT_TOTAL_SIZE         0x2100
 #define ISP_DRC_DISC_MEM_SIZE            0x0600
 
+#define CSI_EN_REG			0x0
+#define CSI_EN_VER_EN				BIT(30)
+#define CSI_EN_CSI_EN				BIT(0)
+
+void sun6i_csi_enable(struct sunxi_isp_device *isp_dev)
+{
+	struct regmap *regmap = isp_dev->regmap_csi;
+
+	printk(KERN_ERR "%s: CSI enable\n", __func__);
+
+	regmap_write(regmap, CSI_EN_REG, CSI_EN_CSI_EN | 0x2);
+}
+
 void sunxi_isp_device_run(void *private)
 {
 	struct sunxi_isp_context *isp_ctx = private;
@@ -185,6 +198,16 @@ void sunxi_isp_device_run(void *private)
 	buffer_dst = v4l2_m2m_next_dst_buf(m2m_ctx);
 
 	memcpy(memory->reg_load, isp_io, 0x240);
+
+	/* CSI */
+
+	sun6i_csi_enable(isp_dev);
+
+	/* Frontend Config */
+
+	value = SUNXI_ISP_FE_CFG_EN |
+		SUNXI_ISP_FE_CFG_SRC0_MODE(SUNXI_ISP_SRC_MODE_DRAM);
+	regmap_write(regmap, SUNXI_ISP_FE_CFG_REG, value);
 
 	/* Tables */
 
@@ -861,6 +884,13 @@ static const struct regmap_config sunxi_isp_regmap_config = {
 	.max_register	= 0x400,
 };
 
+static const struct regmap_config sunxi_isp_csi_regmap_config = {
+	.reg_bits       = 32,
+	.reg_stride     = 4,
+	.val_bits       = 32,
+	.max_register	= 0x100,
+};
+
 static int sunxi_isp_probe(struct platform_device *pdev)
 {
 	struct sunxi_isp_device *isp_dev;
@@ -887,6 +917,26 @@ static int sunxi_isp_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to init register map\n");
 		return PTR_ERR(isp_dev->regmap);
 	}
+
+printk(KERN_ERR "%s: isp regmap ok\n", __func__);
+	/* XXX CSI regmap */
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+printk(KERN_ERR "%s: platform get res %x\n", __func__, res);
+	io_base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(io_base))
+		return PTR_ERR(io_base);
+
+printk(KERN_ERR "%s: go csi regmap\n", __func__);
+
+	isp_dev->regmap_csi = devm_regmap_init_mmio(dev, io_base,
+					     &sunxi_isp_csi_regmap_config);
+	if (IS_ERR(isp_dev->regmap_csi)) {
+		dev_err(dev, "failed to init csi register map\n");
+		return PTR_ERR(isp_dev->regmap_csi);
+	}
+
+	/* XXX CSI regmap */
 
 	isp_dev->clk_bus = devm_clk_get(dev, "bus");
 	if (IS_ERR(isp_dev->clk_bus)) {

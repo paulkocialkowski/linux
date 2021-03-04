@@ -269,6 +269,7 @@ struct sunxi_isp_device {
 	struct device *dev;
 
 	struct regmap *regmap;
+	struct regmap *regmap_csi;
 	struct clk *clk_bus;
 	struct clk *clk_mod;
 	struct clk *clk_ram;
