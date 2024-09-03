@@ -484,7 +484,7 @@ static int jpeg_parse_app14_data(struct jpeg_stream *stream,
  * @len: length of the JPEG buffer
  * @out: returns marker segment positions and optionally parsed headers
  *
- * The out->scan_header pointer must be initialized to NULL or point to a valid
+ * The out->scan pointer must be initialized to NULL or point to a valid
  * v4l2_jpeg_scan_header structure. The out->huffman_tables and
  * out->quantization_tables pointers must be initialized to NULL or point to a
  * valid array of 4 v4l2_jpeg_reference structures each.
