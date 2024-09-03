@@ -176,7 +176,9 @@ static int cedrus_jpeg_setup(struct cedrus_ctx *ctx, struct cedrus_run *run)
 		.quantization_tables = quantization_tables,
 		.huffman_tables = huffman_tables,
 	};
+	const struct v4l2_format_info *format_info;
 	u32 reg, subsampling;
+	bool downsample = false;
 	unsigned long size;
 	int ret, index;
 	u8 hmax, vmax;
@@ -184,34 +186,52 @@ static int cedrus_jpeg_setup(struct cedrus_ctx *ctx, struct cedrus_run *run)
 	size = vb2_get_plane_payload(src_buf, 0);
 	components = header.frame.component;
 
+	format_info = v4l2_format_info(ctx->dst_fmt.pixelformat);
+	if (!format_info)
+		return -EINVAL;
+
 	ret = v4l2_jpeg_parse_header(vb2_plane_vaddr(src_buf, 0), size, &header);
 	if (ret < 0) {
 		v4l2_err(&dev->v4l2_dev, "failed to parse JPEG header: %d\n", ret);
 		return -EINVAL;
 	}
 
-	index = components[0].horizontal_sampling_factor << 20 |
-		components[0].vertical_sampling_factor << 16 |
-		components[1].horizontal_sampling_factor << 12 |
-		components[1].vertical_sampling_factor << 8 |
-		components[2].horizontal_sampling_factor << 4 |
-		components[2].vertical_sampling_factor;
+	switch (header.frame.subsampling) {
+	case V4L2_JPEG_CHROMA_SUBSAMPLING_420:
+		if (format_info->hdiv != 2 || format_info->vdiv != 2) {
+			v4l2_err(&dev->v4l2_dev,
+				 "invalid JPEG 4:2:0 subsampling for destination format\n");
+			return -EINVAL;
+		}
 
-	switch (index) {
-	case 0x221111:
 		subsampling = VE_DEC_MPEG_TRIGGER_CHROMA_FMT_420;
 		break;
-	case 0x211111:
+	case V4L2_JPEG_CHROMA_SUBSAMPLING_422:
+		/* Only allow 4:2:2 or 4:2:0 formats. */
+		if (format_info->hdiv == 2 && format_info->vdiv == 2) {
+			downsample = true;
+		} else if (format_info->hdiv != 2 || format_info->vdiv != 1) {
+			v4l2_err(&dev->v4l2_dev,
+				 "invalid JPEG 4:2:2 subsampling for destination format\n");
+			return -EINVAL;
+		}
+
 		subsampling = VE_DEC_MPEG_TRIGGER_CHROMA_FMT_422;
 		break;
-	case 0x111111:
+	case V4L2_JPEG_CHROMA_SUBSAMPLING_444:
+		/* Only allow 4:4:4 or 4:2:0 formats. */
+		if (format_info->hdiv == 2 && format_info->vdiv == 2) {
+			downsample = true;
+		} else if (format_info->hdiv != 1 || format_info->vdiv != 1) {
+			v4l2_err(&dev->v4l2_dev,
+				 "invalid JPEG 4:4:4 subsampling for destination format\n");
+			return -EINVAL;
+		}
+
 		subsampling = VE_DEC_MPEG_TRIGGER_CHROMA_FMT_444;
 		break;
-	case 0x121111:
-		subsampling = VE_DEC_MPEG_TRIGGER_CHROMA_FMT_422T;
-		break;
 	default:
-		v4l2_err(&dev->v4l2_dev, "unsupported subsampling\n");
+		v4l2_err(&dev->v4l2_dev, "unsupported JPEG subsampling\n");
 		return -EINVAL;
 	}
 
@@ -295,11 +315,8 @@ static int cedrus_jpeg_setup(struct cedrus_ctx *ctx, struct cedrus_run *run)
 	/* Enable appropriate interrupts and components. */
 
 	reg = VE_DEC_MPEG_CTRL_IRQ_MASK;
-	if (subsampling == VE_DEC_MPEG_TRIGGER_CHROMA_FMT_422 ||
-	    subsampling == VE_DEC_MPEG_TRIGGER_CHROMA_FMT_422T ||
-	    subsampling == VE_DEC_MPEG_TRIGGER_CHROMA_FMT_444)
+	if (downsample)
 		reg |= VE_DEC_MPEG_CTRL_JPEG_FORCE_420;
-
 	cedrus_write(dev, VE_DEC_MPEG_CTRL, reg);
 
 	return 0;
