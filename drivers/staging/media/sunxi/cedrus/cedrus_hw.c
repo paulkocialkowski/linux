@@ -108,6 +108,7 @@ void cedrus_dst_format_set(struct cedrus_dev *dev,
 
 		break;
 	case V4L2_PIX_FMT_NV12_32L32:
+	case V4L2_PIX_FMT_NV16_32L32:
 	default:
 		reg = VE_PRIMARY_OUT_FMT_TILED_32_NV12;
 		cedrus_write(dev, VE_PRIMARY_OUT_FMT, reg);

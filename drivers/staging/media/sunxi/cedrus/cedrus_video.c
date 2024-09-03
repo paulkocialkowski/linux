@@ -69,6 +69,10 @@ static struct cedrus_format cedrus_formats[] = {
 		.pixelformat	= V4L2_PIX_FMT_NV12_32L32,
 		.directions	= CEDRUS_DECODE_DST,
 	},
+	{
+		.pixelformat	= V4L2_PIX_FMT_NV16_32L32,
+		.directions	= CEDRUS_DECODE_DST,
+	},
 };
 
 #define CEDRUS_FORMATS_COUNT	ARRAY_SIZE(cedrus_formats)
@@ -142,6 +146,21 @@ void cedrus_prepare_format(struct v4l2_pix_format *pix_fmt)
 
 		/* Chroma plane size. */
 		sizeimage += bytesperline * ALIGN(height, 64) / 2;
+
+		break;
+
+	case V4L2_PIX_FMT_NV16_32L32:
+		/* 32-aligned stride. */
+		bytesperline = ALIGN(width, 32);
+
+		/* 32-aligned height. */
+		height = ALIGN(height, 32);
+
+		/* Luma plane size. */
+		sizeimage = bytesperline * height;
+
+		/* Chroma plane size. */
+		sizeimage += bytesperline * height;
 
 		break;
 
