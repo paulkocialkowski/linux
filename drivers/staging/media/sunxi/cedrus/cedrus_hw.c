@@ -31,6 +31,21 @@
 #include "cedrus_hw.h"
 #include "cedrus_regs.h"
 
+void cedrus_engine_reset(struct cedrus_dev *dev)
+{
+	u32 reg, flags;
+	int ret;
+
+	/* Wait for the cache and memory access to idle. */
+	flags = VE_RESET_SYNC_IDLE | VE_RESET_CACHE_SYNC_IDLE;
+	readl_poll_timeout_atomic(dev->base + VE_RESET, reg,
+				  (reg & flags) == flags, 1, 100);
+
+	/* Reset anyway if busy for 100 ms. */
+	cedrus_write(dev, VE_RESET, reg | VE_RESET_DECODER);
+	cedrus_write(dev, VE_RESET, reg);
+}
+
 int cedrus_engine_enable(struct cedrus_ctx *ctx)
 {
 	u32 reg = 0;

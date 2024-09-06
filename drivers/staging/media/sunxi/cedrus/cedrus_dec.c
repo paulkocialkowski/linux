@@ -92,6 +92,7 @@ void cedrus_device_run(void *priv)
 
 	v4l2_m2m_buf_copy_metadata(run.src, run.dst, true);
 
+	cedrus_engine_reset(dev);
 	cedrus_dst_format_set(dev, &ctx->dst_fmt);
 
 	error = ctx->current_codec->setup(ctx, &run);

@@ -46,6 +46,16 @@
 #define VE_MODE_DEC_H264			(0x01 << 0)
 #define VE_MODE_DEC_MPEG			(0x00 << 0)
 
+#define VE_RESET				0x04
+
+#define VE_RESET_ENCODER_MASK			BIT(25)
+#define VE_RESET_ENCODER			BIT(24)
+#define VE_RESET_DECODER_MASK			BIT(17)
+#define VE_RESET_DECODER			BIT(16)
+#define VE_RESET_SYNC_IDLE			BIT(9)
+#define VE_RESET_CACHE_SYNC_IDLE		BIT(8)
+#define VE_RESET_RESET				BIT(0)
+
 #define VE_BUF_CTRL				0x50
 
 #define VE_BUF_CTRL_INTRAPRED_EXT_RAM		(0x02 << 2)
