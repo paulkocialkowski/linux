@@ -92,20 +92,25 @@ static int cedrus_jpeg_write_dh_tables(struct cedrus_dev *dev,
 	struct v4l2_jpeg_reference *tables[4], *table;
 	struct v4l2_jpeg_scan_component_spec *comp;
 	unsigned int i, j, ret;
+	unsigned int count;
 	size_t length;
 	u32 *ptr, val;
 
 	cedrus_write(dev, VE_DEC_MPEG_SRAM_RW_OFFSET, 0);
 
+	count = hdr->scan->num_components;
+	if (count > 2)
+		count = 2;
+
 	j = 0;
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < count; i++) {
 		comp = &hdr->scan->component[i];
 
 		tables[j++] = &hdr->huffman_tables[comp->dc_entropy_coding_table_selector];
 		tables[j++] = &hdr->huffman_tables[comp->ac_entropy_coding_table_selector + 2];
 	}
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < 2 * count; i++) {
 		ret = cedrus_write_table_header(dev, tables[i]);
 		if (ret)
 			return ret;
@@ -114,7 +119,7 @@ static int cedrus_jpeg_write_dh_tables(struct cedrus_dev *dev,
 	for (i = 0; i < 192; i++)
 		cedrus_write(dev, VE_DEC_MPEG_SRAM_RW_DATA, 0);
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < 2 * count; i++) {
 		table = tables[i];
 		ptr = (u32*)&table->start[16];
 		length = table->length - 16;
