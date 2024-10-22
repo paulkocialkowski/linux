@@ -143,6 +143,15 @@ struct v4l2_jpeg_header {
 	enum v4l2_jpeg_app14_tf app14_tf;
 };
 
+extern u8 v4l2_jpeg_default_dht_luma_dc_data[];
+extern const struct v4l2_jpeg_reference v4l2_jpeg_default_dht_luma_dc;
+extern u8 v4l2_jpeg_default_dht_luma_ac_data[];
+extern const struct v4l2_jpeg_reference v4l2_jpeg_default_dht_luma_ac;
+extern u8 v4l2_jpeg_default_dht_chroma_dc_data[];
+extern const struct v4l2_jpeg_reference v4l2_jpeg_default_dht_chroma_dc;
+extern u8 v4l2_jpeg_default_dht_chroma_ac_data[];
+extern const struct v4l2_jpeg_reference v4l2_jpeg_default_dht_chroma_ac;
+
 int v4l2_jpeg_parse_header(void *buf, size_t len, struct v4l2_jpeg_header *out);
 
 int v4l2_jpeg_parse_frame_header(void *buf, size_t len,
