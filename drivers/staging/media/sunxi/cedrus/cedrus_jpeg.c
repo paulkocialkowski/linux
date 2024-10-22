@@ -110,6 +110,15 @@ static int cedrus_jpeg_write_dh_tables(struct cedrus_dev *dev,
 		tables[j++] = &hdr->huffman_tables[comp->ac_entropy_coding_table_selector + 2];
 	}
 
+	if (!tables[0]->start)
+		tables[0] = &v4l2_jpeg_default_dht_luma_dc;
+	if (!tables[1]->start)
+		tables[1] = &v4l2_jpeg_default_dht_luma_ac;
+	if (!tables[2]->start && hdr->scan->num_components > 1)
+		tables[2] = &v4l2_jpeg_default_dht_chroma_dc;
+	if (!tables[3]->start && hdr->scan->num_components > 1)
+		tables[3] = &v4l2_jpeg_default_dht_chroma_ac;
+
 	for (i = 0; i < 2 * count; i++) {
 		ret = cedrus_write_table_header(dev, tables[i]);
 		if (ret)
