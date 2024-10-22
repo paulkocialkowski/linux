@@ -116,8 +116,7 @@ static int cedrus_jpeg_write_dh_tables(struct cedrus_dev *dev,
 			return ret;
 	}
 
-	for (i = 0; i < 192; i++)
-		cedrus_write(dev, VE_DEC_MPEG_SRAM_RW_DATA, 0);
+	cedrus_write(dev, VE_DEC_MPEG_SRAM_RW_OFFSET, 1024);
 
 	for (i = 0; i < 2 * count; i++) {
 		table = tables[i];
