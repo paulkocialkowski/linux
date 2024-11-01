@@ -98,11 +98,23 @@ static int pvr_device_clk_init(struct pvr_device *pvr_dev)
 	struct clk *core_clk;
 	struct clk *sys_clk;
 	struct clk *mem_clk;
+	struct clk *bus_clk;
+	struct clk *pll_clk;
 
 	core_clk = devm_clk_get(drm_dev->dev, "core");
 	if (IS_ERR(core_clk))
 		return dev_err_probe(drm_dev->dev, PTR_ERR(core_clk),
 				     "failed to get core clock\n");
+
+	bus_clk = devm_clk_get_optional(drm_dev->dev, "bus");
+	if (IS_ERR(bus_clk))
+		return dev_err_probe(drm_dev->dev, PTR_ERR(bus_clk),
+				     "failed to get bus clock\n");
+
+	pll_clk = devm_clk_get_optional(drm_dev->dev, "pll");
+	if (IS_ERR(pll_clk))
+		return dev_err_probe(drm_dev->dev, PTR_ERR(pll_clk),
+				     "failed to get pll clock\n");
 
 	sys_clk = devm_clk_get_optional(drm_dev->dev, "sys");
 	if (IS_ERR(sys_clk))
@@ -114,6 +126,8 @@ static int pvr_device_clk_init(struct pvr_device *pvr_dev)
 		return dev_err_probe(drm_dev->dev, PTR_ERR(mem_clk),
 				     "failed to get mem clock\n");
 
+	pvr_dev->bus_clk = bus_clk;
+	pvr_dev->pll_clk = pll_clk;
 	pvr_dev->core_clk = core_clk;
 	pvr_dev->sys_clk = sys_clk;
 	pvr_dev->mem_clk = mem_clk;

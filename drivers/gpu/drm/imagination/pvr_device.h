@@ -109,6 +109,8 @@ struct pvr_device {
 	 */
 	void __iomem *regs;
 
+	struct clk *bus_clk;
+	struct clk *pll_clk;
 	/**
 	 * @core_clk: General core clock.
 	 *

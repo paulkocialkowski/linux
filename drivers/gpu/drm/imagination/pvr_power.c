@@ -255,6 +255,8 @@ pvr_power_device_suspend(struct device *dev)
 	clk_disable_unprepare(pvr_dev->mem_clk);
 	clk_disable_unprepare(pvr_dev->sys_clk);
 	clk_disable_unprepare(pvr_dev->core_clk);
+	clk_disable_unprepare(pvr_dev->pll_clk);
+	clk_disable_unprepare(pvr_dev->bus_clk);
 
 	err = reset_control_assert(pvr_dev->reset);
 
@@ -276,9 +278,17 @@ pvr_power_device_resume(struct device *dev)
 	if (!drm_dev_enter(drm_dev, &idx))
 		return -EIO;
 
-	err = clk_prepare_enable(pvr_dev->core_clk);
+	err = clk_prepare_enable(pvr_dev->bus_clk);
 	if (err)
 		goto err_drm_dev_exit;
+
+	err = clk_prepare_enable(pvr_dev->pll_clk);
+	if (err)
+		goto err_bus_clk_disable;
+
+	err = clk_prepare_enable(pvr_dev->core_clk);
+	if (err)
+		goto err_pll_clk_disable;
 
 	err = clk_prepare_enable(pvr_dev->sys_clk);
 	if (err)
@@ -323,6 +333,12 @@ err_sys_clk_disable:
 
 err_core_clk_disable:
 	clk_disable_unprepare(pvr_dev->core_clk);
+
+err_pll_clk_disable:
+	clk_disable_unprepare(pvr_dev->pll_clk);
+
+err_bus_clk_disable:
+	clk_disable_unprepare(pvr_dev->bus_clk);
 
 err_drm_dev_exit:
 	drm_dev_exit(idx);
