@@ -7,6 +7,7 @@
 #define _DT_BINDINGS_CLK_SUN50I_A100_H_
 
 #define CLK_PLL_PERIPH0		3
+#define CLK_PLL_GPU		7
 
 #define CLK_CPUX		24
 
