@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: (GPL-2.0+ or MIT)
+/*
+ * Copyright (c) 2024 Linumiz
+ * Author: Parthiban Nallathambi <parthiban@linumiz.com>
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/leds/common.h>
+#include "sun50i-a133-helper-core.dtsi"
+
+/{
+	model = "Szbaijie A133 Helper board";
+	compatible = "szbaijie,helper-a133", "szbaijie,helper-a133-core", "allwinner,sun50i-a133";
+
+	aliases {
+		mmc0 = &mmc0;
+		serial0 = &uart0;
+	};
+
+	backlight: backlight {
+		compatible = "gpio-backlight";
+		gpios = <&pio 3 23 GPIO_ACTIVE_HIGH>;
+		default-on;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led-1 {
+			color = <LED_COLOR_ID_GREEN>;
+			gpios = <&pio 7 13 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+		};
+	};
+
+	panel {
+		compatible = "panel-lvds";
+		backlight = <&backlight>;
+		enable-gpios = <&pio 1 6 GPIO_ACTIVE_HIGH>;
+
+		width-mm = <339>;
+		height-mm = <212>;
+		data-mapping = "vesa-24";
+
+		panel-timing {
+			/* 1024x600 @60Hz */
+			clock-frequency = <65000000>;
+			hactive = <1280>;
+			vactive = <800>;
+			hback-porch = <85>;
+			vback-porch = <21>;
+			hsync-len = <20>;
+			hfront-porch = <180>;
+			vfront-porch = <12>;
+			vsync-len = <5>;
+		};
+
+		port {
+			lvds_in_tcon_lcd0: endpoint {
+				remote-endpoint = <&tcon_lcd0_out_lvds>;
+			};
+		};
+	};
+};
+
+&de {
+	status = "okay";
+};
+
+&ehci1 {
+	status = "okay";
+};
+
+&mmc0 {
+	vmmc-supply = <&reg_dcdc1>;
+	vqmmc-supply = <&reg_dcdc1>;
+	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
+	disable-wp;
+	bus-width = <4>;
+	status = "okay";
+};
+
+&ohci1 {
+	status = "okay";
+};
+
+&tcon_top0 {
+	status = "okay";
+};
+
+&tcon_lcd0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lcd_lvds0_pins>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		tcon_lcd0_out: port@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			tcon_lcd0_out_lvds: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&lvds_in_tcon_lcd0>;
+			};
+		};
+	};
+};
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_pb_pins>;
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usbphy {
+	usb0_id_det-gpios = <&pio 7 8 GPIO_ACTIVE_HIGH>; /* PH8 */
+	usb0_vbus-supply = <&reg_dcdc1>;
+	usb1_vbus-supply = <&reg_dcdc4>;
+	status = "okay";
+};
