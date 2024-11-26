@@ -15,6 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
+#include <linux/phy/phy.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
@@ -168,6 +169,20 @@ static void sun6i_tcon_setup_lvds_phy(struct sun4i_tcon *tcon,
 	regmap_write_bits(tcon->regs, SUN4I_TCON0_LVDS_ANA0_REG,
 			  SUN6I_TCON0_LVDS_ANA0_EN_DRVD(0xf),
 			  SUN6I_TCON0_LVDS_ANA0_EN_DRVD(val));
+}
+
+static void sun50i_tcon_setup_lvds_phy(struct sun4i_tcon *tcon,
+				      const struct drm_encoder *encoder)
+{
+	struct phy *phy;
+
+	phy = devm_phy_optional_get(tcon->dev, "phy");
+	if (phy) {
+		phy_init(phy);
+		phy_power_on(phy);
+	}
+
+	sun6i_tcon_setup_lvds_phy(tcon, encoder);
 }
 
 static void sun4i_tcon_lvds_set_status(struct sun4i_tcon *tcon,
@@ -1542,6 +1557,13 @@ static const struct sun4i_tcon_quirks sun20i_d1_lcd_quirks = {
 	.set_mux		= sun8i_r40_tcon_tv_set_mux,
 };
 
+static const struct sun4i_tcon_quirks sun8i_a100_lcd_quirks = {
+	.supports_lvds		= true,
+	.has_channel_0		= true,
+	.dclk_min_div		= 1,
+	.setup_lvds_phy		= sun50i_tcon_setup_lvds_phy,
+};
+
 /* sun4i_drv uses this list to check if a device node is a TCON */
 const struct of_device_id sun4i_tcon_of_table[] = {
 	{ .compatible = "allwinner,sun4i-a10-tcon", .data = &sun4i_a10_quirks },
@@ -1561,6 +1583,7 @@ const struct of_device_id sun4i_tcon_of_table[] = {
 	{ .compatible = "allwinner,sun9i-a80-tcon-tv", .data = &sun9i_a80_tcon_tv_quirks },
 	{ .compatible = "allwinner,sun20i-d1-tcon-lcd", .data = &sun20i_d1_lcd_quirks },
 	{ .compatible = "allwinner,sun20i-d1-tcon-tv", .data = &sun8i_r40_tv_quirks },
+	{ .compatible = "allwinner,sun50i-a100-tcon-lcd", .data = &sun8i_a100_lcd_quirks },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, sun4i_tcon_of_table);
