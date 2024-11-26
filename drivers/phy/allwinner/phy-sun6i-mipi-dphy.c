@@ -314,13 +314,11 @@ static void sun50i_a100_mipi_dphy_tx_power_on(struct sun6i_dphy *dphy)
 	/* Disable sigma-delta modulation. */
 	regmap_write(dphy->regs, SUN50I_DPHY_PLL_REG2, 0);
 
-	regmap_update_bits(dphy->regs, SUN6I_DPHY_ANA4_REG,
-			   SUN6I_DPHY_ANA4_REG_EN_MIPI,
-			   SUN6I_DPHY_ANA4_REG_EN_MIPI);
-
 	regmap_update_bits(dphy->regs, SUN50I_COMBO_PHY_REG0,
+			   SUN50I_COMBO_PHY_REG0_EN_LVDS |
 			   SUN50I_COMBO_PHY_REG0_EN_MIPI |
 			   SUN50I_COMBO_PHY_REG0_EN_COMBOLDO,
+			   SUN50I_COMBO_PHY_REG0_EN_LVDS |
 			   SUN50I_COMBO_PHY_REG0_EN_MIPI |
 			   SUN50I_COMBO_PHY_REG0_EN_COMBOLDO);
 
@@ -528,6 +526,22 @@ static int sun6i_dphy_exit(struct phy *phy)
 	return 0;
 }
 
+static int sun6i_set_mode(struct phy *phy, enum phy_mode mode, int submode)
+{
+	struct sun6i_dphy *dphy = phy_get_drvdata(phy);
+
+	switch (mode) {
+	case PHY_MODE_MIPI_DPHY:
+		regmap_update_bits(dphy->regs, SUN6I_DPHY_ANA4_REG,
+				   SUN6I_DPHY_ANA4_REG_EN_MIPI,
+				   SUN6I_DPHY_ANA4_REG_EN_MIPI);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 static const struct phy_ops sun6i_dphy_ops = {
 	.configure	= sun6i_dphy_configure,
@@ -535,6 +549,7 @@ static const struct phy_ops sun6i_dphy_ops = {
 	.power_off	= sun6i_dphy_power_off,
 	.init		= sun6i_dphy_init,
 	.exit		= sun6i_dphy_exit,
+	.set_mode	= sun6i_set_mode,
 };
 
 static const struct regmap_config sun6i_dphy_regmap_config = {
