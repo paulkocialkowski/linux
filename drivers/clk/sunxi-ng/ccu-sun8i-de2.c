@@ -364,6 +364,10 @@ static const struct of_device_id sunxi_de2_clk_ids[] = {
 		.data = &sun50i_a64_de2_clk_desc,
 	},
 	{
+		.compatible = "allwinner,sun50i-a100-de2-clk",
+		.data = &sun8i_v3s_de2_clk_desc,
+	},
+	{
 		.compatible = "allwinner,sun50i-h5-de2-clk",
 		.data = &sun50i_h5_de2_clk_desc,
 	},
