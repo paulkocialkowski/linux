@@ -10,6 +10,7 @@
 
 #define CLK_CPUX		24
 
+#define CLK_PLL_COM		21
 #define CLK_APB1		29
 
 #define CLK_MBUS		31
