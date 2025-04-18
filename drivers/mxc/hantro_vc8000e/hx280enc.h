@@ -18,6 +18,8 @@
  * USA.
  */
 
+#define HX280ENC_DEBUG
+
 #ifndef _HX280ENC_H_
 #define _HX280ENC_H_
 #include <linux/ioctl.h>    /* needed for the _IOW etc stuff used later */

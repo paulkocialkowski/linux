@@ -522,6 +522,7 @@ static long hantroenc_ioctl(struct file *filp,
 
 	switch (_IOC_NR(cmd)) {
 	case _IOC_NR(HX280ENC_IOCGHWOFFSET): {
+		printk(KERN_ERR "hx280: HX280ENC_IOCGHWOFFSET\n");
 		u32 id;
 
 		__get_user(id, (u32 *)arg);
@@ -533,6 +534,7 @@ static long hantroenc_ioctl(struct file *filp,
 		break;
 	}
 	case _IOC_NR(HX280ENC_IOCGHWIOSIZE):	{
+		printk(KERN_ERR "hx280: HX280ENC_IOCGHWIOSIZE\n");
 		u32 id;
 		u32 io_size;
 
@@ -547,26 +549,30 @@ static long hantroenc_ioctl(struct file *filp,
 		return 0;
 	}
 	case _IOC_NR(HX280ENC_IOCGSRAMOFFSET):
+		printk(KERN_ERR "hx280: HX280ENC_IOCGSRAMOFFSET\n");
 		__put_user(sram_base, (unsigned long *) arg);
 		break;
 	case _IOC_NR(HX280ENC_IOCGSRAMEIOSIZE):
+		printk(KERN_ERR "hx280: HX280ENC_IOCGSRAMEIOSIZE\n");
 		__put_user(sram_size, (unsigned int *) arg);
 		break;
 	case _IOC_NR(HX280ENC_IOCG_CORE_NUM):
+		printk(KERN_ERR "hx280: HX280ENC_IOCG_CORE_NUM\n");
 		__put_user(total_core_num, (unsigned int *) arg);
 		break;
 	case _IOC_NR(HX280ENC_IOCH_ENC_RESERVE): {
 		u32 core_info;
 		int ret;
 
-		PDEBUG("Reserve ENC Cores\n");
 		__get_user(core_info, (u32 *)arg);
+		printk(KERN_ERR "hx280: HX280ENC_IOCH_ENC_RESERVE core_info: %u\n", core_info);
 		ret = ReserveEncoder(hantroenc_data, &core_info, filp);
 		if (ret == 0)
 			__put_user(core_info, (u32 *) arg);
 		return ret;
 	}
 	case _IOC_NR(HX280ENC_IOCH_ENC_RELEASE): {
+		printk(KERN_ERR "hx280: HX280ENC_IOCH_ENC_RELEASE\n");
 		u32 core_info;
 
 		__get_user(core_info, (u32 *)arg);
@@ -582,7 +588,7 @@ static long hantroenc_ioctl(struct file *filp,
 		u32 reg_value;
 
 		__get_user(core_id, (u32 *)arg);
-		PDEBUG("Enable ENC Core\n");
+		printk(KERN_ERR "hx280: HX280ENC_IOCG_EN_CORE core_id: %u\n", core_id);
 
 		if (hantroenc_data[core_id].is_reserved == 0)
 			return -EPERM;
@@ -604,6 +610,7 @@ static long hantroenc_ioctl(struct file *filp,
 	}
 
 	case _IOC_NR(HX280ENC_IOCG_CORE_WAIT): {
+		printk(KERN_ERR "hx280: HX280ENC_IOCG_CORE_WAIT\n");
 		u32 core_info;
 		u32 irq_status;
 		u32 i;
@@ -637,6 +644,7 @@ static long hantroenc_ioctl(struct file *filp,
 		break;
 	}
 	case _IOC_NR(HX280ENC_IOC_WRITE_REGS): {
+		printk(KERN_ERR "hx280: HX280ENC_IOC_WRITE_REGS\n");
 		struct enc_regs_buffer regs;
 
 		err = copy_from_user(&regs, (void *)arg, sizeof(regs));
@@ -649,6 +657,7 @@ static long hantroenc_ioctl(struct file *filp,
 		break;
 	}
 	case _IOC_NR(HX280ENC_IOC_READ_REGS): {
+		printk(KERN_ERR "hx280: HX280ENC_IOC_READ_REGS\n");
 		struct enc_regs_buffer regs;
 
 		err = copy_from_user(&regs, (void *)arg, sizeof(regs));
