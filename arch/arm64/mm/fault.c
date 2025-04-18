@@ -14,6 +14,7 @@
 #include <linux/signal.h>
 #include <linux/mm.h>
 #include <linux/hardirq.h>
+#include <linux/hwtrace.h>
 #include <linux/init.h>
 #include <linux/kasan.h>
 #include <linux/kprobes.h>
@@ -37,6 +38,7 @@
 #include <asm/esr.h>
 #include <asm/kprobes.h>
 #include <asm/mte.h>
+#include <asm/probes.h>
 #include <asm/processor.h>
 #include <asm/sysreg.h>
 #include <asm/system_misc.h>
@@ -527,6 +529,80 @@ static bool is_write_abort(unsigned long esr)
 	return (esr & ESR_ELx_WNR) && !(esr & ESR_ELx_CM);
 }
 
+unsigned long hantroenc_reg_read(unsigned long offset);
+void hantroenc_reg_write(unsigned long offset, unsigned long value);
+
+static int hwtrace_page_fault(struct mm_struct *mm, unsigned long addr,
+			     struct pt_regs *regs)
+{
+	struct hwtrace_private *private;
+	struct vm_area_struct *vma = find_vma(mm, addr);
+	unsigned long offset;
+	unsigned long value;
+	u32 reg;
+	probe_opcode_t insn;
+
+	if (!vma || !vma->vm_private_data)
+		return 0;
+
+	private = vma->vm_private_data;
+	if (private->magic != HWTRACE_MAGIC)
+		return 0;
+
+	offset = addr - vma->vm_start;
+
+	copy_from_user_nofault(&insn, (void *)regs->pc, sizeof(insn));
+	insn = le32_to_cpu(insn);
+
+	printk(KERN_ERR "hwtrace-pc: %#llx\n", regs->pc);
+
+//	printk(KERN_ERR "fault: addr %#x offset %#x pc %#x insn %#x\n", addr, offset, pc_addr, insn);
+
+	if (aarch64_insn_is_load_imm(insn) || aarch64_insn_is_ldr_reg(insn)) {
+/*
+		imm = aarch64_insn_decode_immediate(AARCH64_INSN_IMM_12, insn);
+		reg = aarch64_insn_decode_register(AARCH64_INSN_REGTYPE_RN, insn);
+		size_type = (insn & GENMASK(31, 30)) >> 30;
+
+		imm <<= size_type;
+		if (imm != offset)
+			printk(KERN_ERR "fault: offset mismatch!\n");
+
+		reg = aarch64_insn_decode_register(AARCH64_INSN_REGTYPE_RN, insn);
+		value = pt_regs_read_reg(regs, reg);
+		if ((value + imm) != addr)
+			printk(KERN_ERR "fault: address mismatch!\n");
+*/
+		reg = aarch64_insn_decode_register(AARCH64_INSN_REGTYPE_RT,
+						   insn);
+		value = private->read(offset);
+
+		printk(KERN_ERR "hwtrace-read: %#lx %#lx\n", offset, value);
+
+//		printk(KERN_ERR "fault: ldr offset %#lx value %#lx\n", offset, value);
+
+		pt_regs_write_reg(regs, reg, value);
+		instruction_pointer_set(regs, instruction_pointer(regs) + 4);
+	} else if (aarch64_insn_is_store_imm(insn) ||
+		   aarch64_insn_is_str_reg(insn)) {
+		reg = aarch64_insn_decode_register(AARCH64_INSN_REGTYPE_RT,
+						   insn);
+		value = pt_regs_read_reg(regs, reg);
+
+		private->write(offset, value);
+
+		printk(KERN_ERR "hwtrace-write: %#lx %#lx\n", offset, value);
+
+//		printk(KERN_ERR "fault: str offset %#lx value %#lx\n", offset, value);
+
+		instruction_pointer_set(regs, instruction_pointer(regs) + 4);
+	} else {
+		printk(KERN_ERR "hwtrace: unhandled instruction!\n");
+	}
+
+	return 1;
+}
+
 static int __kprobes do_page_fault(unsigned long far, unsigned long esr,
 				   struct pt_regs *regs)
 {
@@ -539,6 +615,9 @@ static int __kprobes do_page_fault(unsigned long far, unsigned long esr,
 	struct vm_area_struct *vma;
 
 	if (kprobe_page_fault(regs, esr))
+		return 0;
+
+	if (hwtrace_page_fault(mm, addr, regs))
 		return 0;
 
 	/*
