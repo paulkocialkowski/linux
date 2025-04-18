@@ -308,6 +308,9 @@ static int GetWorkableCore(hantroenc_t *dev, u32 *core_info, u32 *core_info_tmp,
 	required_num = ((cores >> CORE_INFO_AMOUNT_OFFSET) & 0x7)+1;
 	core_mapping = (u8)(cores & 0xFF);
 
+	if (!core_mapping)
+		core_mapping = 1;
+
 	if (*core_info_tmp == 0)
 		*core_info_tmp = required_num << 8;
 	else
