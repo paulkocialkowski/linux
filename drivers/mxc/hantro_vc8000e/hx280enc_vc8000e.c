@@ -54,6 +54,7 @@
 #include <linux/timer.h>
 #include <linux/compat.h>
 #include <linux/of.h>
+#include <linux/hwtrace.h>
 
 /* our own stuff */
 #include "hx280enc.h"
@@ -213,14 +214,30 @@ static int hantro_vc8000e_power_on_disirq(hantroenc_t *hx280enc)
 	return 0;
 }
 
+static unsigned long hantroenc_hwtrace_read(unsigned long offset)
+{
+	return readl(hantroenc_data[0].hwregs + offset);
+}
+
+static void hantroenc_hwtrace_write(unsigned long offset, unsigned long value)
+{
+	writel(value, hantroenc_data[0].hwregs + offset);
+}
+
+static struct hwtrace_private hantroenc_hwtrace = {
+	.magic	= HWTRACE_MAGIC,
+	.read	= hantroenc_hwtrace_read,
+	.write	= hantroenc_hwtrace_write,
+};
+
 static int hantroenc_mmap(struct file *filp, struct vm_area_struct *vm)
 {
 	if (vm->vm_pgoff == (hantroenc_data[0].core_cfg.base_addr >> PAGE_SHIFT)) {
 		vm_flags_set(vm, VM_IO);
 		vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
 		PDEBUG("hx280enc mmap: size=0x%lX, page off=0x%lX\n", (vm->vm_end - vm->vm_start), vm->vm_pgoff);
-		return remap_pfn_range(vm, vm->vm_start, vm->vm_pgoff, vm->vm_end - vm->vm_start,
-						vm->vm_page_prot) ? -EAGAIN : 0;
+		vm->vm_private_data = &hantroenc_hwtrace;
+		return 0;
 	} else {
 		pr_err("invalid map offset :0x%lX\n", vm->vm_pgoff);
 		return -EINVAL;
