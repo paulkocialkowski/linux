@@ -5,7 +5,6 @@
  */
 
 #include "sun50i-a100.dtsi"
-#include "sun50i-a100-cpu-opp.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 
 /{
