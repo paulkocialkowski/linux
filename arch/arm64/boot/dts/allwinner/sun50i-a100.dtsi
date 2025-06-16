@@ -114,6 +114,18 @@
 		#size-cells = <1>;
 		ranges = <0 0 0 0x3fffffff>;
 
+		gpu: gpu@1800000 {
+			compatible = "img,img-axe";
+			reg = <0x01800000 0x80000>;
+			clocks = <&ccu CLK_PLL_GPU>, <&ccu CLK_GPU>, <&ccu CLK_BUS_GPU>;
+			clock-names = "pll", "core", "bus";
+			resets = <&ccu RST_BUS_GPU>;
+			reset-names = "ahb";
+			interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&pd_gpu>;
+			status = "disabled";
+		};
+
 		syscon: syscon@3000000 {
 			compatible = "allwinner,sun50i-a100-system-control",
 				     "allwinner,sun50i-a64-system-control";
@@ -706,6 +718,18 @@
 					reg = <1>;
 				};
 			};
+		};
+
+		pd_gpu: gpu-power-domain@7001000 {
+			compatible = "allwinner,sun50i-a100-ppu", "syscon";
+			reg = <0x07001000 0x40>;
+			interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "ppu-irq";
+			clocks = <&r_ccu CLK_R_APB1_PPU>;
+			clock-names = "ppu";
+			resets = <&r_ccu RST_R_APB1_PPU>;
+			reset-names = "ppu_rst";
+			#power-domain-cells = <0>;
 		};
 
 		r_ccu: clock@7010000 {
