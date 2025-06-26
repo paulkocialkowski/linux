@@ -123,7 +123,6 @@
 			reset-names = "ahb";
 			interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
 			power-domains = <&pd_gpu>;
-			status = "disabled";
 		};
 
 		syscon: syscon@3000000 {
