@@ -388,6 +388,8 @@ source "drivers/gpu/drm/xlnx/Kconfig"
 
 source "drivers/gpu/drm/gud/Kconfig"
 
+source "drivers/gpu/drm/img-rogue/Kconfig"
+
 source "drivers/gpu/drm/sitronix/Kconfig"
 
 source "drivers/gpu/drm/solomon/Kconfig"
