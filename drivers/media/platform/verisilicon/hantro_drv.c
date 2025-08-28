@@ -91,7 +91,7 @@ static void hantro_job_finish(struct hantro_dev *vpu,
 {
 	pm_runtime_put_autosuspend(vpu->dev);
 
-	clk_bulk_disable(vpu->variant->num_clocks, vpu->clocks);
+	/* Keep clocks enabled in case of recurrent interrupts. */
 
 	hantro_job_finish_no_pm(vpu, ctx, result);
 }
