@@ -237,14 +237,8 @@ static void pvr_drm_release(struct drm_device *ddev, struct drm_file *dfile)
 	module_put(THIS_MODULE);
 }
 
-/*
- * The DRM global lock is taken for ioctls unless the DRM_UNLOCKED flag is set.
- * If you revise one of the driver specific ioctls, or add a new one, that has
- * DRM_UNLOCKED set then consider whether the gPVRSRVLock mutex needs to be
- * taken.
- */
 static struct drm_ioctl_desc pvr_drm_ioctls[] = {
-	DRM_IOCTL_DEF_DRV(PVR_SRVKM_CMD, PVRSRV_BridgeDispatchKM, DRM_RENDER_ALLOW | DRM_UNLOCKED)
+	DRM_IOCTL_DEF_DRV(PVR_SRVKM_CMD, PVRSRV_BridgeDispatchKM, DRM_RENDER_ALLOW)
 };
 
 #if defined(CONFIG_COMPAT)
@@ -280,6 +274,7 @@ static const struct file_operations pvr_drm_fops = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 12, 0))
 	.fasync			= drm_fasync,
 #endif
+	.fop_flags		= FOP_UNSIGNED_OFFSET,
 };
 
 const struct drm_driver pvr_drm_generic_driver = {
@@ -301,7 +296,6 @@ const struct drm_driver pvr_drm_generic_driver = {
 
 	.name			= PVR_DRM_DRIVER_NAME,
 	.desc			= PVR_DRM_DRIVER_DESC,
-	.date			= PVR_DRM_DRIVER_DATE,
 	.major			= PVRVERSION_MAJ,
 	.minor			= PVRVERSION_MIN,
 	.patchlevel		= PVRVERSION_BUILD,

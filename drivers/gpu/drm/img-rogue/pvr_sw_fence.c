@@ -73,12 +73,6 @@ const char *pvr_sw_fence_context_name(struct pvr_sw_fence_context *fctx)
 	return fctx->context_name;
 }
 
-void pvr_sw_fence_context_value_str(struct pvr_sw_fence_context *fctx,
-				    char *str, int size)
-{
-	snprintf(str, size, "%d", atomic_read(&fctx->seqno));
-}
-
 static inline unsigned
 pvr_sw_fence_context_seqno_next(struct pvr_sw_fence_context *fence_context)
 {
@@ -97,19 +91,6 @@ static const char *pvr_sw_fence_get_timeline_name(struct dma_fence *fence)
 	struct pvr_sw_fence *pvr_sw_fence = to_pvr_sw_fence(fence);
 
 	return pvr_sw_fence_context_name(pvr_sw_fence->fence_context);
-}
-
-static void pvr_sw_fence_value_str(struct dma_fence *fence, char *str, int size)
-{
-	snprintf(str, size, "%d", fence->seqno);
-}
-
-static void pvr_sw_fence_timeline_value_str(struct dma_fence *fence,
-					    char *str, int size)
-{
-	struct pvr_sw_fence *pvr_sw_fence = to_pvr_sw_fence(fence);
-
-	pvr_sw_fence_context_value_str(pvr_sw_fence->fence_context, str, size);
 }
 
 static bool pvr_sw_fence_enable_signaling(struct dma_fence *fence)
@@ -144,8 +125,6 @@ static void pvr_sw_fence_release(struct dma_fence *fence)
 static const struct dma_fence_ops pvr_sw_fence_ops = {
 	.get_driver_name = pvr_sw_fence_get_driver_name,
 	.get_timeline_name = pvr_sw_fence_get_timeline_name,
-	.fence_value_str = pvr_sw_fence_value_str,
-	.timeline_value_str = pvr_sw_fence_timeline_value_str,
 	.enable_signaling = pvr_sw_fence_enable_signaling,
 	.wait = dma_fence_default_wait,
 	.release = pvr_sw_fence_release,
@@ -161,9 +140,9 @@ pvr_sw_fence_context_create(const char *context_name, const char *driver_name)
 		return NULL;
 
 	fence_context->context = dma_fence_context_alloc(1);
-	strlcpy(fence_context->context_name, context_name,
+	strncpy(fence_context->context_name, context_name,
 		sizeof(fence_context->context_name));
-	strlcpy(fence_context->driver_name, driver_name,
+	strncpy(fence_context->driver_name, driver_name,
 		sizeof(fence_context->driver_name));
 	atomic_set(&fence_context->seqno, 0);
 	atomic_set(&fence_context->fence_count, 0);

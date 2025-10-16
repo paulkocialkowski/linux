@@ -424,7 +424,12 @@ _GetPoolListHead(IMG_UINT32 ui32CPUCacheFlags,
 	return IMG_TRUE;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
 static struct shrinker g_sShrinker;
+static struct shrinker *g_psShrinker = &g_sShrinker;
+#else
+static struct shrinker *g_psShrinker;
+#endif
 
 /* Returning the number of pages that still reside in the page pool. */
 static unsigned long
@@ -440,7 +445,7 @@ _CountObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psSh
 {
 	int remain;
 
-	PVR_ASSERT(psShrinker == &g_sShrinker);
+	PVR_ASSERT(psShrinker == g_psShrinker);
 	(void)psShrinker;
 	(void)psShrinkControl;
 
@@ -462,7 +467,7 @@ _ScanObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psShr
 	LinuxUnpinEntry *psUnpinEntry, *psTempUnpinEntry;
 	IMG_UINT32 uiPagesFreed;
 
-	PVR_ASSERT(psShrinker == &g_sShrinker);
+	PVR_ASSERT(psShrinker == g_psShrinker);
 	(void)psShrinker;
 
 	/* In order to avoid possible deadlock use mutex_trylock in place of mutex_lock */
@@ -547,27 +552,7 @@ e_exit:
 #endif
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0))
-static int
-_ShrinkPagePool(struct shrinker *psShrinker, struct shrink_control *psShrinkControl)
-{
-	if (psShrinkControl->nr_to_scan != 0)
-	{
-		return _ScanObjectsInPagePool(psShrinker, psShrinkControl);
-	}
-	else
-	{
-		/* No pages are being reclaimed so just return the page count */
-		return _CountObjectsInPagePool(psShrinker, psShrinkControl);
-	}
-}
-
-static struct shrinker g_sShrinker =
-{
-	.shrink = _ShrinkPagePool,
-	.seeks = DEFAULT_SEEKS
-};
-#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
 static struct shrinker g_sShrinker =
 {
 	.count_objects = _CountObjectsInPagePool,
@@ -586,7 +571,22 @@ void LinuxInitPhysmem(void)
 	if (g_psLinuxPagePoolCache)
 	{
 		/* Only create the shrinker if we created the cache OK */
-		register_shrinker(&g_sShrinker);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
+		register_shrinker(&g_sShrinker, "pvr-pp");
+#else
+		g_psShrinker = shrinker_alloc(0, "pvr-pp");
+		if (g_psShrinker)
+		{
+			g_psShrinker->count_objects = _CountObjectsInPagePool;
+			g_psShrinker->scan_objects = _ScanObjectsInPagePool;
+			g_psShrinker->seeks = DEFAULT_SEEKS;
+			shrinker_register(g_psShrinker);
+		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR, "Unable to allocate a shrinker for page pool cache"));
+		}
+#endif
 	}
 	_PagePoolUnlock();
 
@@ -617,7 +617,11 @@ void LinuxDeinitPhysmem(void)
 	/* Free the page cache */
 	kmem_cache_destroy(g_psLinuxPagePoolCache);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
 	unregister_shrinker(&g_sShrinker);
+#else
+	shrinker_free(g_psShrinker);
+#endif
 	_PagePoolUnlock();
 
 	kmem_cache_destroy(g_psLinuxPageArray);
@@ -3180,7 +3184,7 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
 #if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
 	pvAddress = vmap(pagearray, ui32PageCount, VM_READ | VM_WRITE, prot);
 #else
-	pvAddress = pvr_vmap(pagearray, ui32PageCount, -1, prot);
+	pvAddress = pvr_vmap(pagearray, ui32PageCount, VM_READ | VM_WRITE | VM_MAP, prot);
 #endif
 	if (pvAddress == NULL)
 	{

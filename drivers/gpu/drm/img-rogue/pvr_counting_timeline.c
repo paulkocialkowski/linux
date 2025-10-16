@@ -107,29 +107,7 @@ pvr_counting_fence_timeline_debug_request(void *data, u32 verbosity,
 			DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 			void *pvDumpDebugFile)
 {
-	struct pvr_counting_fence_timeline *timeline =
-		(struct pvr_counting_fence_timeline *)data;
-	struct pvr_counting_fence *obj;
-	unsigned long flags;
-	char value[128];
-
-	if (DD_VERB_LVL_ENABLED(verbosity, DEBUG_REQUEST_VERBOSITY_MEDIUM)) {
-		spin_lock_irqsave(&timeline->active_fences_lock, flags);
-		pvr_sw_fence_context_value_str(timeline->context, value,
-					       sizeof(value));
-		PVR_DUMPDEBUG_LOG(pfnDumpDebugPrintf, pvDumpDebugFile,
-				  "sw: %s @%s cur=%llu",
-				  pvr_sw_fence_context_name(timeline->context),
-				  value, timeline->current_value);
-		list_for_each_entry(obj, &timeline->active_fences,
-				    active_list_entry) {
-			obj->fence->ops->fence_value_str(obj->fence,
-							 value, sizeof(value));
-			PVR_DUMPDEBUG_LOG(pfnDumpDebugPrintf, pvDumpDebugFile,
-					  " @%s: val=%llu", value, obj->value);
-		}
-		spin_unlock_irqrestore(&timeline->active_fences_lock, flags);
-	}
+	return;
 }
 
 struct pvr_counting_fence_timeline *pvr_counting_fence_timeline_create(

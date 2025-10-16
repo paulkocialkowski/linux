@@ -58,7 +58,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
-#include <stdarg.h>
+#include <linux/stdarg.h>
 
 #if defined(__QNXNTO__)
 #include <stdio.h>
@@ -736,7 +736,7 @@ IMG_CHAR* OSStringNCopy(IMG_CHAR *pszDest, const IMG_CHAR *pszSrc, size_t uSize)
 
 /**************************************************************************/ /*!
 @Function       OSStringLCopy
-@Description    OS function to support the BSD C strlcpy() function.
+@Description    OS function to support the BSD C strncpy() function.
  */ /**************************************************************************/
 size_t OSStringLCopy(IMG_CHAR *pszDest, const IMG_CHAR *pszSrc, size_t uSize);
 

@@ -46,7 +46,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/moduleparam.h>
 #include <linux/workqueue.h>
 #include <linux/string.h>
-#include <stdbool.h>
 
 /* Common and SO layer */
 #include "img_defs.h"
@@ -571,7 +570,7 @@ static int apphint_read(char *buffer, size_t count, APPHINT_ID ue,
 			goto err_exit;
 		}
 
-		strlcpy(value->STRING, string, len);
+		strncpy(value->STRING, string, len);
 		break;
 	}
 	default:
@@ -759,7 +758,8 @@ static int apphint_kparam_set(const char *val, const struct kernel_param *kp)
 	int result;
 
 	/* need to discard const in case of string comparison */
-	result = strlcpy(val_copy, val, APPHINT_BUFFER_SIZE);
+	strncpy(val_copy, val, APPHINT_BUFFER_SIZE);
+	result = strlen(val);
 
 	get_apphint_id_from_action_addr(kp->arg, &id);
 	if (result < APPHINT_BUFFER_SIZE) {
@@ -1331,7 +1331,8 @@ int pvr_apphint_get_string(APPHINT_ID ue, IMG_CHAR *pBuffer, size_t size)
 {
 	int error = -ERANGE;
 	if (ue < APPHINT_ID_MAX && apphint.val[ue].stored.STRING) {
-		if (strlcpy(pBuffer, apphint.val[ue].stored.STRING, size) < size) {
+		strncpy(pBuffer, apphint.val[ue].stored.STRING, size);
+		if (strlen(apphint.val[ue].stored.STRING) < size) {
 			error = 0;
 		}
 	}

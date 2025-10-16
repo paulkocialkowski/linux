@@ -417,7 +417,8 @@ IMG_INT OSMemCmp(void *pvBufA, void *pvBufB, size_t uiLen)
 
 size_t OSStringLCopy(IMG_CHAR *pszDest, const IMG_CHAR *pszSrc, size_t uSize)
 {
-	size_t	uSrcSize = strlcpy(pszDest, pszSrc, uSize);
+	size_t	uSrcSize = strlen(pszSrc);
+	strncpy(pszDest, pszSrc, uSize);
 
 #if defined(PVR_DEBUG_STRLCPY) && defined(DEBUG)
 	/* Handle truncation by dumping calling stack if debug allows */
@@ -1145,7 +1146,7 @@ static void OSTimerCallbackBody(TIMER_CALLBACK_DATA *psTimerCBData)
 */ /**************************************************************************/
 static void OSTimerCallbackWrapper(struct timer_list *psTimer)
 {
-	TIMER_CALLBACK_DATA *psTimerCBData = from_timer(psTimerCBData, psTimer, sTimer);
+	TIMER_CALLBACK_DATA *psTimerCBData = timer_container_of(psTimerCBData, psTimer, sTimer);
 #else
 /*************************************************************************/ /*!
 @Function       OSTimerCallbackWrapper
@@ -1287,7 +1288,7 @@ PVRSRV_ERROR OSDisableTimer (IMG_HANDLE hTimer)
 	flush_workqueue(psTimerWorkQueue);
 
 	/* remove timer */
-	del_timer_sync(&psTimerCBData->sTimer);
+	timer_delete_sync(&psTimerCBData->sTimer);
 
 	/*
 	 * This second flush is to catch the case where the timer ran
@@ -1770,7 +1771,7 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 
 	if ((psVMA->vm_flags & VM_MIXEDMAP) || bIsLMA)
 	{
-		psVMA->vm_flags |= VM_MIXEDMAP;
+		vm_flags_set(psVMA, VM_MIXEDMAP);
 		bMixedMap = IMG_TRUE;
 	}
 	else
@@ -1792,7 +1793,7 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)) */
 				{
 					bMixedMap = IMG_TRUE;
-					psVMA->vm_flags |= VM_MIXEDMAP;
+					vm_flags_set(psVMA, VM_MIXEDMAP);
 					break;
 				}
 			}

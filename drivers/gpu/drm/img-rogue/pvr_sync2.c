@@ -1351,7 +1351,7 @@ pvr_sync_create_waiter_for_foreign_sync(int fd, PSYNC_CHECKPOINT_CONTEXT psSyncC
 	kernel->fence_sync->id =
 		SyncCheckpointGetId(kernel->fence_sync->client_sync_checkpoint);
 	kernel->fence_sync->type = SYNC_PT_FOREIGN_FENCE_TYPE;
-	strlcpy(kernel->fence_sync->class, fence->name, sizeof(kernel->fence_sync->class));
+	strncpy(kernel->fence_sync->class, fence->name, sizeof(kernel->fence_sync->class));
 
 	/* The custom waiter structure is freed in the waiter callback */
 	waiter = kmalloc(sizeof(*waiter), GFP_KERNEL);
@@ -1968,7 +1968,7 @@ static long pvr_sync_ioctl_rename(struct pvr_sync_timeline *timeline,
 	}
 
 	data.szName[sizeof(data.szName) - 1] = '\0';
-	strlcpy(timeline->obj->name, data.szName, sizeof(timeline->obj->name));
+	strncpy(timeline->obj->name, data.szName, sizeof(timeline->obj->name));
 err:
 	return err;
 }
@@ -2426,7 +2426,7 @@ enum PVRSRV_ERROR pvr_sync_init(struct device *dev)
 	pvr_sync_data.sync_checkpoint_ops.pfnCheckState = NULL;
 	pvr_sync_data.sync_checkpoint_ops.pfnSignalWaiters = NULL;
 #endif
-	strlcpy(pvr_sync_data.sync_checkpoint_ops.pszImplName, "pvr_sync2", SYNC_CHECKPOINT_IMPL_MAX_STRLEN);
+	strncpy(pvr_sync_data.sync_checkpoint_ops.pszImplName, "pvr_sync2", SYNC_CHECKPOINT_IMPL_MAX_STRLEN);
 
 	SyncCheckpointRegisterFunctions(&pvr_sync_data.sync_checkpoint_ops);
 

@@ -135,31 +135,17 @@ pvr_fence_context_fences_dump(struct pvr_fence_context *fctx,
 		const char *timeline_value_str = "unknown timeline value";
 		const char *fence_value_str = "unknown fence value";
 
-		pvr_fence->base.ops->fence_value_str(&pvr_fence->base, value,
-						     sizeof(value));
 		PVR_DUMPDEBUG_LOG(pfnDumpDebugPrintf, pvDumpDebugFile,
 				  " @%s", value);
 
 		if (is_pvr_fence(fence))
 			continue;
 
-		if (fence->ops->timeline_value_str) {
-			fence->ops->timeline_value_str(fence, value,
-						       sizeof(value));
-			timeline_value_str = value;
-		}
-
 		PVR_DUMPDEBUG_LOG(pfnDumpDebugPrintf, pvDumpDebugFile,
 				  " | %s: %s (driver: %s)",
 				  fence->ops->get_timeline_name(fence),
 				  timeline_value_str,
 				  fence->ops->get_driver_name(fence));
-
-		if (fence->ops->fence_value_str) {
-			fence->ops->fence_value_str(fence, value,
-						    sizeof(value));
-			fence_value_str = value;
-		}
 
 		PVR_DUMPDEBUG_LOG(pfnDumpDebugPrintf, pvDumpDebugFile,
 				  " |  @%s (foreign)", value);
@@ -346,7 +332,7 @@ pvr_fence_context_create(void *dev_cookie,
 	fctx->fence_wq = fence_status_wq;
 
 	fctx->fence_context = dma_fence_context_alloc(1);
-	strlcpy(fctx->name, name, sizeof(fctx->name));
+	strncpy(fctx->name, name, sizeof(fctx->name));
 
 	srv_err = PVRSRVRegisterCmdCompleteNotify(&fctx->cmd_complete_handle,
 #if defined(PVRSRV_SYNC_CHECKPOINT_CCB)
@@ -428,40 +414,6 @@ pvr_fence_get_timeline_name(struct dma_fence *fence)
 	return NULL;
 }
 
-static
-void pvr_fence_fence_value_str(struct dma_fence *fence, char *str, int size)
-{
-	struct pvr_fence *pvr_fence = to_pvr_fence(fence);
-
-	if (!pvr_fence)
-		return;
-
-	snprintf(str, size,
-		 "%u: (%s%s) refs=%u fwaddr=%#08x enqueue=%u status=%-9s %s%s",
-		 pvr_fence->fence->seqno,
-		 test_bit(DMA_FENCE_FLAG_ENABLE_SIGNAL_BIT,
-			  &pvr_fence->fence->flags) ? "+" : "-",
-		 test_bit(DMA_FENCE_FLAG_SIGNALED_BIT,
-			  &pvr_fence->fence->flags) ? "+" : "-",
-		 refcount_read(&pvr_fence->fence->refcount.refcount),
-		 SyncCheckpointGetFirmwareAddr(
-			 pvr_fence->sync_checkpoint),
-		 SyncCheckpointGetEnqueuedCount(pvr_fence->sync_checkpoint),
-		 SyncCheckpointGetStateString(pvr_fence->sync_checkpoint),
-		 pvr_fence->name,
-		 (&pvr_fence->base != pvr_fence->fence) ?
-		 "(foreign)" : "");
-}
-
-static
-void pvr_fence_timeline_value_str(struct dma_fence *fence, char *str, int size)
-{
-	struct pvr_fence *pvr_fence = to_pvr_fence(fence);
-
-	if (pvr_fence)
-		pvr_context_value_str(pvr_fence->fctx, str, size);
-}
-
 static bool
 pvr_fence_enable_signaling(struct dma_fence *fence)
 {
@@ -532,8 +484,6 @@ pvr_fence_release(struct dma_fence *fence)
 const struct dma_fence_ops pvr_fence_ops = {
 	.get_driver_name = pvr_fence_get_driver_name,
 	.get_timeline_name = pvr_fence_get_timeline_name,
-	.fence_value_str = pvr_fence_fence_value_str,
-	.timeline_value_str = pvr_fence_timeline_value_str,
 	.enable_signaling = pvr_fence_enable_signaling,
 	.signaled = pvr_fence_is_signaled,
 	.wait = dma_fence_default_wait,
@@ -619,48 +569,6 @@ pvr_fence_foreign_get_timeline_name(struct dma_fence *fence)
 	return "foreign";
 }
 
-static
-void pvr_fence_foreign_fence_value_str(struct dma_fence *fence, char *str,
-				       int size)
-{
-	struct pvr_fence *pvr_fence = to_pvr_fence(fence);
-	u32 sync_addr = 0;
-	u32 sync_value_next;
-
-	if (WARN_ON(!pvr_fence))
-		return;
-
-	sync_addr = SyncCheckpointGetFirmwareAddr(pvr_fence->sync_checkpoint);
-	sync_value_next = PVRSRV_SYNC_CHECKPOINT_SIGNALLED;
-
-	/*
-	 * Include the fence flag bits from the foreign fence instead of our
-	 * shadow copy. This is done as the shadow fence flag bits aren't used.
-	 */
-	snprintf(str, size,
-		 "%u: (%s%s) refs=%u fwaddr=%#08x cur=%#08x nxt=%#08x %s",
-		 fence->seqno,
-		 test_bit(DMA_FENCE_FLAG_ENABLE_SIGNAL_BIT,
-			  &pvr_fence->fence->flags) ? "+" : "-",
-		 test_bit(DMA_FENCE_FLAG_SIGNALED_BIT,
-			  &pvr_fence->fence->flags) ? "+" : "-",
-		 refcount_read(&fence->refcount.refcount),
-		 sync_addr,
-		 pvr_fence_sync_value(pvr_fence),
-		 sync_value_next,
-		 pvr_fence->name);
-}
-
-static
-void pvr_fence_foreign_timeline_value_str(struct dma_fence *fence, char *str,
-					  int size)
-{
-	struct pvr_fence *pvr_fence = to_pvr_fence(fence);
-
-	if (pvr_fence)
-		pvr_context_value_str(pvr_fence->fctx, str, size);
-}
-
 static bool
 pvr_fence_foreign_enable_signaling(struct dma_fence *fence)
 {
@@ -706,8 +614,6 @@ pvr_fence_foreign_release(struct dma_fence *fence)
 const struct dma_fence_ops pvr_fence_foreign_ops = {
 	.get_driver_name = pvr_fence_foreign_get_driver_name,
 	.get_timeline_name = pvr_fence_foreign_get_timeline_name,
-	.fence_value_str = pvr_fence_foreign_fence_value_str,
-	.timeline_value_str = pvr_fence_foreign_timeline_value_str,
 	.enable_signaling = pvr_fence_foreign_enable_signaling,
 	.wait = pvr_fence_foreign_wait,
 	.release = pvr_fence_foreign_release,

@@ -1484,7 +1484,6 @@ static INLINE PVRSRV_ERROR CacheOpValidateVAOffset(PMR *psPMR,
 		p4d_t *p4d;
 		pud_t *pud;
 		pmd_t *pmd;
-		pte_t *ptep;
 		mm = current->active_mm;
 
 		/*
@@ -1517,14 +1516,6 @@ static INLINE PVRSRV_ERROR CacheOpValidateVAOffset(PMR *psPMR,
 
 		pmd = pmd_offset(pud, (uintptr_t)pvAddr);
 		if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
-		{
-			eError = PVRSRV_ERROR_INVALID_CPU_ADDR;
-			pvAddr = NULL;
-			goto e0;
-		}
-
-		ptep = pte_offset_map(pmd, (uintptr_t)pvAddr);
-		if (!ptep || !pte_present(*ptep))
 		{
 			eError = PVRSRV_ERROR_INVALID_CPU_ADDR;
 			pvAddr = NULL;

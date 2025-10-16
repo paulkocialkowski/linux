@@ -182,7 +182,7 @@ static int pvr_sync_open(struct inode *inode, struct file *file)
 	if (!timeline)
 		goto err_out;
 
-	strlcpy(timeline->name, task_comm, sizeof(timeline->name));
+	strncpy(timeline->name, task_comm, sizeof(timeline->name));
 	timeline->file = file;
 	timeline->is_sw = false;
 
@@ -370,7 +370,7 @@ pvr_sync_create_fence(const char *fence_name,
 		err = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto err_destroy_fence;
 	}
-	strlcpy(sync_file_user_name(sync_file),
+	strncpy(sync_file_user_name(sync_file),
 		pvr_fence->name,
 		sizeof(sync_file_user_name(sync_file)));
 	dma_fence_put(&pvr_fence->base);
@@ -607,9 +607,9 @@ static long pvr_sync_ioctl_rename(struct pvr_sync_timeline *timeline,
 	}
 
 	data.szName[sizeof(data.szName) - 1] = '\0';
-	strlcpy(timeline->name, data.szName, sizeof(timeline->name));
+	strncpy(timeline->name, data.szName, sizeof(timeline->name));
 	if (timeline->hw_fence_context)
-		strlcpy(timeline->hw_fence_context->name, data.szName,
+		strncpy(timeline->hw_fence_context->name, data.szName,
 			sizeof(timeline->hw_fence_context->name));
 
 err:
@@ -836,7 +836,7 @@ enum PVRSRV_ERROR pvr_sync_init(struct device *dev)
 	pvr_sync_data.sync_checkpoint_ops.pfnCheckState = pvr_sync_check_state;
 	pvr_sync_data.sync_checkpoint_ops.pfnSignalWaiters = NULL;
 #endif /* defined(PVRSRV_SYNC_CHECKPOINT_CCB) */
-	strlcpy(pvr_sync_data.sync_checkpoint_ops.pszImplName, "pvr_sync_file", SYNC_CHECKPOINT_IMPL_MAX_STRLEN);
+	strncpy(pvr_sync_data.sync_checkpoint_ops.pszImplName, "pvr_sync_file", SYNC_CHECKPOINT_IMPL_MAX_STRLEN);
 
 	SyncCheckpointRegisterFunctions(&pvr_sync_data.sync_checkpoint_ops);
 
@@ -998,20 +998,7 @@ static void _dump_sync_point(struct dma_fence *fence,
 							  DUMPDEBUG_PRINTF_FUNC *dump_debug_printf,
 							  void *dump_debug_file)
 {
-	const struct dma_fence_ops *fence_ops = fence->ops;
-	bool signaled = dma_fence_is_signaled(fence);
-	char time[16] = { '\0' };
-
-	fence_ops->timeline_value_str(fence, time, sizeof(time));
-
-	PVR_DUMPDEBUG_LOG(dump_debug_printf,
-					  dump_debug_file,
-					  "<%p> Seq#=%u TS=%s State=%s TLN=%s",
-					  fence,
-					  fence->seqno,
-					  time,
-					  (signaled) ? "Signalled" : "Active",
-					  fence_ops->get_timeline_name(fence));
+	return;
 }
 
 static void _dump_fence(struct dma_fence *fence,
