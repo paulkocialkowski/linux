@@ -115,14 +115,31 @@
 		ranges = <0 0 0 0x3fffffff>;
 
 		gpu: gpu@1800000 {
-			compatible = "img,img-axe";
+			compatible = "img,gpu";
 			reg = <0x01800000 0x80000>;
 			clocks = <&ccu CLK_PLL_GPU>, <&ccu CLK_GPU>, <&ccu CLK_BUS_GPU>;
-			clock-names = "pll", "core", "bus";
+			clock-names = "clk_parent", "clk_mali", "clk_bus";
 			resets = <&ccu RST_BUS_GPU>;
-			reset-names = "ahb";
 			interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "IRQGPU";
 			power-domains = <&pd_gpu>;
+			gpu_idle = <0>;
+			dvfs_status = <1>;
+			pll_rate = <456000>;
+			independent_power = <0>;
+			markid-points = <
+				0x0400 456
+				0x1400 504
+				0x1000 504
+				0x2000 504
+				0x0000 504
+			>;
+			operating-points = <
+				/* KHz   uV */
+				456000 950000
+				399000 950000
+				228000 950000
+			>;
 		};
 
 		syscon: syscon@3000000 {
