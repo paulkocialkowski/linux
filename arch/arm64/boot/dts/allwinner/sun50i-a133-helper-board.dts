@@ -20,7 +20,7 @@
 
 	backlight: backlight {
 		compatible = "gpio-backlight";
-		gpios = <&pio 3 23 GPIO_ACTIVE_HIGH>;
+		gpios = <&pio 3 23 GPIO_ACTIVE_LOW>;
 		default-on;
 	};
 
@@ -45,15 +45,17 @@
 
 		panel-timing {
 			/* 1024x600 @60Hz */
-			clock-frequency = <65000000>;
-			hactive = <1280>;
-			vactive = <800>;
-			hback-porch = <85>;
-			vback-porch = <21>;
-			hsync-len = <20>;
-			hfront-porch = <180>;
-			vfront-porch = <12>;
-			vsync-len = <5>;
+			clock-frequency = <51000000>;
+
+			hactive = <1024>;
+			hback-porch = <160>;
+			hfront-porch = <90>;
+			hsync-len = <70>;
+
+			vactive = <600>;
+			vback-porch = <35>;
+			vfront-porch = <14>;
+			vsync-len = <1>;
 		};
 
 		port {
