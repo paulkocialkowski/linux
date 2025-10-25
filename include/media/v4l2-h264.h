@@ -12,6 +12,73 @@
 
 #include <media/v4l2-ctrls.h>
 
+#define V4L2_H264_SPS_VIDEO_FLAG_FRAME_CROPPING				BIT(0)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_PARAMETERS_PRESENT			BIT(1)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_ASPECT_RATIO_INFO_PRESENT		BIT(2)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_OVERSCAN_INFO_PRESENT		BIT(3)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_OVERSCAN_APPROPRIATE		BIT(4)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_VIDEO_SIGNAL_TYPE_PRESENT		BIT(5)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_VIDEO_FULL_RANGE			BIT(6)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_COLOUR_DESCRIPTION_PRESENT		BIT(7)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_CHROMA_LOC_INFO_PRESENT		BIT(8)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_TIMING_INFO_PRESENT		BIT(9)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_FIXED_FRAME_RATE			BIT(10)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_NAL_HRD_PARAMETERS_PRESENT		BIT(11)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_VCL_HRD_PARAMETERS_PRESENT		BIT(12)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_LOW_DELAY_HRD			BIT(13)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_PIC_STRUCT_PRESENT			BIT(14)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_BITSTREAM_RESTRICTION		BIT(15)
+#define V4L2_H264_SPS_VIDEO_FLAG_VUI_MOTION_VECTORS_OVER_PIC_BOUNDARIES	BIT(16)
+
+struct v4l2_h264_sps_video_hrd {
+	u8 cpb_cnt_minus1;
+	u8 bit_rate_scale;
+	u8 cpb_size_scale;
+
+	u32 bit_rate_value_minus1[32];
+	u32 cpb_size_value_minus1[32];
+	u8 cbr_flag[32];
+
+	u8 initial_cpb_removal_delay_length_minus1;
+	u8 cpb_removal_delay_length_minus1;
+	u8 dpb_output_delay_length_minus1;
+	u8 time_offset_length;
+};
+
+struct v4l2_h264_sps_video {
+	u32 frame_crop_left_offset;
+	u32 frame_crop_right_offset;
+	u32 frame_crop_top_offset;
+	u32 frame_crop_bottom_offset;
+
+	u8 aspect_ratio_idc;
+	u16 sar_width;
+	u16 sar_height;
+
+	u8 video_format;
+	u8 colour_primaries;
+	u8 transfer_characteristics;
+	u8 matrix_coefficients;
+
+	u8 chroma_sample_loc_type_top_field;
+	u8 chroma_sample_loc_type_bottom_field;
+
+	u32 num_units_in_tick;
+	u32 time_scale;
+
+	struct v4l2_h264_sps_video_hrd nal_hrd;
+	struct v4l2_h264_sps_video_hrd vcl_hrd;
+
+	u32 max_bytes_per_pic_denom;
+	u32 max_bits_per_mb_denom;
+	u32 log2_max_mv_length_horizontal;
+	u32 log2_max_mv_length_vertical;
+	u32 max_num_reorder_frames;
+	u32 max_dec_frame_buffering;
+
+	u32 flags;
+};
+
 /**
  * struct v4l2_h264_reflist_builder - Reference list builder object
  *
