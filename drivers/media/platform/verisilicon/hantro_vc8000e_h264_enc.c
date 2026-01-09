@@ -598,6 +598,14 @@ int hantro_vc8000e_h264_enc_run(struct hantro_ctx *ctx)
 	regs->swreg38.input_rotation = HANTRO_VC8000E_SWREG38_INPUT_ROTATION_0;
 
 	luma_stride = src_fmt->plane_fmt[0].bytesperline;
+
+	/*
+	 * The hardware seems to expect the luma stride to represent pixels per
+	 * line for packed cases, instead of the usual bytes per line.
+	 */
+	if (info->comp_planes == 1)
+		luma_stride /= info->bpp[0];
+
 	regs->swreg210.input_lu_stride = luma_stride;
 
 	if (info->comp_planes > 1) {
